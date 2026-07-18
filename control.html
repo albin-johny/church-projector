@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Verse Deck — Control Panel</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600&family=Hanken+Grotesk:wght@400;500;600&family=JetBrains+Mono:wght@400;500&family=Noto+Sans+Malayalam:wght@400;500&family=Noto+Sans+Devanagari:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<div class="app">
+
+  <!-- LEFT: library rail -->
+  <div class="rail">
+    <div class="rail-header">
+      <div class="mark">Verse<em>Deck</em></div>
+      <div class="sub" id="library-count">Loading library…</div>
+    </div>
+    <div class="tabs">
+      <button class="tab-btn active" data-tab="songs">Songs</button>
+      <button class="tab-btn" data-tab="bible">Bible</button>
+      <button class="tab-btn" data-tab="custom">Custom</button>
+    </div>
+    <div class="search-wrap" id="songs-search-wrap">
+      <button class="btn btn-bookmarks" id="btn-bookmarks-filter">★ Bookmarks</button>
+      <input type="text" id="song-search" placeholder="Search songs, lyrics, tags…">
+    </div>
+    <div class="list" id="song-list"></div>
+    <div class="rail-footer" id="songs-footer">
+      <button class="btn btn-small" id="btn-new-song">+ New song</button>
+      <button class="btn btn-small" id="btn-export">Export</button>
+      <button class="btn btn-small" id="btn-import">Import</button>
+      <input type="file" id="file-import" accept="application/json" style="display:none">
+    </div>
+  </div>
+
+  <!-- CENTER: editor / bible picker -->
+  <div class="stage" id="stage"></div>
+
+  <!-- RIGHT: live preview + controls -->
+  <div class="preview-pane">
+    <h2>Live on screen</h2>
+    <div class="status-row">
+      <div class="dot" id="display-dot"></div>
+      <span id="display-status">Display window not open</span>
+    </div>
+    <div class="mini-screen" id="mini-screen">Nothing live yet</div>
+
+    <div class="controls-block">
+      <div class="nav-row">
+        <button class="btn" id="btn-prev">◀ Prev</button>
+        <button class="btn" id="btn-next">Next ▶</button>
+      </div>
+      <div class="nav-row">
+        <button class="btn" id="btn-blank">Blank</button>
+        <button class="btn btn-danger" id="btn-clear">Clear</button>
+      </div>
+      <div class="nav-row">
+        <button class="btn" id="btn-font-dec" title="Smaller text on the projector">A−</button>
+        <span class="font-scale-label" id="font-scale-label">100%</span>
+        <button class="btn" id="btn-font-inc" title="Larger text on the projector">A+</button>
+      </div>
+      <button class="btn btn-gold" id="btn-open-display" style="margin-top:6px;">Open display window ↗</button>
+      <button class="btn" id="btn-present" style="margin-top:6px;">Present on this screen ▣</button>
+      <div class="hint">Drag the display window onto the projector monitor, then press F or F11 in it for fullscreen. Use "Present on this screen" when the PC only has one monitor (same screen as the projector).</div>
+    </div>
+  </div>
+</div>
+
+<div class="present-overlay" id="present-overlay">
+  <div id="present-stage-inner">
+    <div id="present-title"></div>
+    <div id="present-text-stack">
+      <div id="present-text"></div>
+      <div id="present-text-2" class="hidden"></div>
+    </div>
+    <div id="present-ref"></div>
+  </div>
+  <div id="present-idle">Waiting for control panel…</div>
+  <div id="present-blank-overlay"></div>
+  <div class="present-hint">Up/Down or Space to navigate · Esc to exit</div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script src="js/link.js"></script>
+<script src="js/store.js"></script>
+<script src="js/bible.js"></script>
+<script src="js/control.js"></script>
+</body>
+</html>

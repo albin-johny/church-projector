@@ -1,0 +1,99 @@
+:root{
+  --stage-bg:#060c17;
+  --stage-text:#eef3fa;
+  --stage-dim: rgba(238,243,250,0.55);
+  --gold:#2f6fed;
+  --font-display: 'Fraunces', Georgia, 'Times New Roman', serif;
+  --font-ui: 'Hanken Grotesk', 'Segoe UI', system-ui, sans-serif;
+  /* Manual override set from the control panel's A-/A+ buttons, to
+     compensate for a projector that crops/letterboxes the image edges. */
+  --font-scale: 1;
+}
+*{box-sizing:border-box;}
+html,body{
+  height:100%;
+  margin:0;
+  background:var(--stage-bg);
+  overflow:hidden;
+  cursor:none;
+}
+body{
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  font-family:var(--font-display);
+  color:var(--stage-text);
+}
+body.show-cursor{ cursor:default; }
+
+#blank-overlay{
+  position:fixed; inset:0;
+  background:#000;
+  opacity:0;
+  pointer-events:none;
+  transition:opacity 0.35s ease;
+  z-index:20;
+}
+#blank-overlay.on{ opacity:1; pointer-events:all; }
+
+#stage-inner{
+  width:100%;
+  max-width:1600px;
+  padding:6vh 8vw;
+  text-align:center;
+}
+
+#title-tag{
+  font-family:var(--font-ui);
+  font-size:calc(1.1vw * var(--font-scale));
+  letter-spacing:0.16em;
+  text-transform:uppercase;
+  color:var(--gold);
+  margin-bottom:2.4vh;
+  min-height:1.4vw;
+}
+
+#text-stack{
+  display:flex;
+  flex-direction:column;
+  gap:3.6vh;
+}
+
+#main-text, #main-text-2{
+  font-size:clamp(28px, 4.6vw, 82px);
+  line-height:1.42;
+  font-weight:500;
+  white-space:pre-wrap;
+  word-break:normal;
+}
+
+#main-text-2{
+  padding-top:3.6vh;
+  border-top:1px solid rgba(238,243,250,0.14);
+  color:var(--stage-dim);
+}
+
+#main-text.lang-mal, #main-text-2.lang-mal, #title-tag.lang-mal{ font-family: 'Noto Sans Malayalam', var(--font-display); }
+#main-text.lang-hin, #main-text-2.lang-hin, #title-tag.lang-hin{ font-family: 'Noto Sans Devanagari', var(--font-display); }
+
+#sub-ref{
+  margin-top:3.4vh;
+  font-family:var(--font-ui);
+  font-size:calc(1.05vw * var(--font-scale));
+  color:var(--stage-dim);
+  letter-spacing:0.04em;
+}
+
+#idle-mark{
+  position:fixed;
+  bottom:5vh;
+  left:0; right:0;
+  text-align:center;
+  font-family:var(--font-ui);
+  font-size:12px;
+  letter-spacing:0.2em;
+  text-transform:uppercase;
+  color:rgba(238,243,250,0.18);
+}
+
+.hidden{ display:none !important; }
