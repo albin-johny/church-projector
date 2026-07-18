@@ -1,19 +1,38 @@
 :root{
-  --ink:#0b1524;
-  --ink-soft:#152238;
-  --panel:#101d30;
-  --line: rgba(210,225,250,0.10);
-  --paper:#eef3fa;
-  --paper-dim:#93a8c4;
-  --gold:#2f6fed;
-  --gold-soft: rgba(47,111,237,0.18);
-  --gold-text:#f2f6fc;
-  --green:#4f8a6d;
+  --ink:#0a0a0a;
+  --ink-soft:#1a1a1a;
+  --panel:#121212;
+  --line: rgba(255,255,255,0.12);
+  --paper:#f5f5f5;
+  --paper-dim:#9a9a9a;
+  --gold:#f5f5f5;
+  --gold-soft: rgba(245,245,245,0.14);
+  --gold-text:#0a0a0a;
+  --green:#6b9e7c;
   --red:#c2564d;
   --font-scale: 1;
   --font-display: 'Fraunces', Georgia, 'Times New Roman', serif;
   --font-ui: 'Hanken Grotesk', 'Segoe UI', system-ui, sans-serif;
   --font-mono: 'JetBrains Mono', 'Consolas', monospace;
+}
+
+/* Light theme for the control panel only — the projector display and the
+   in-page Present overlay intentionally stay black/dark regardless (see
+   CONTEXT.md: dark-for-projector-legibility is a deliberate choice, not
+   tied to the operator's own UI preference). Toggled via a data-theme
+   attribute on <html>, set from control.js and persisted in localStorage. */
+:root[data-theme="light"]{
+  --ink:#f7f7f5;
+  --ink-soft:#ececea;
+  --panel:#ffffff;
+  --line: rgba(0,0,0,0.12);
+  --paper:#141414;
+  --paper-dim:#6b6b6b;
+  --gold:#141414;
+  --gold-soft: rgba(20,20,20,0.08);
+  --gold-text:#fafafa;
+  --green:#3f7a52;
+  --red:#b23b30;
 }
 
 *{box-sizing:border-box;}
@@ -46,6 +65,12 @@ body{
   padding:22px 20px 16px;
   border-bottom:1px solid var(--line);
 }
+.rail-header-top{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:10px;
+}
 .rail-header .mark{
   font-family:var(--font-display);
   font-size:22px;
@@ -60,6 +85,29 @@ body{
   text-transform:uppercase;
   color:var(--paper-dim);
 }
+
+.rail-header-actions{
+  flex:0 0 auto;
+  display:flex;
+  gap:6px;
+}
+
+.theme-toggle{
+  flex:0 0 auto;
+  width:30px;
+  height:30px;
+  border-radius:50%;
+  border:1px solid var(--line);
+  background:transparent;
+  color:var(--paper);
+  font-size:14px;
+  line-height:1;
+  cursor:pointer;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+}
+.theme-toggle:hover{ border-color:var(--paper-dim); }
 
 .tabs{
   display:flex;
@@ -340,11 +388,50 @@ body{
 }
 .toast.show{ opacity:1; }
 
+/* ---------- Login gate ---------- */
+.login-overlay{
+  position:fixed; inset:0;
+  background:var(--ink);
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  z-index:200;
+}
+.login-overlay.hidden{ display:none !important; }
+.login-box{
+  width:100%;
+  max-width:320px;
+  padding:32px 28px;
+  background:var(--panel);
+  border:1px solid var(--line);
+  border-radius:6px;
+}
+.login-box .mark{
+  font-family:var(--font-display);
+  font-size:24px;
+  color:var(--paper);
+  text-align:center;
+}
+.login-box .mark em{ color:var(--gold); font-style:normal; }
+.login-box .meta{
+  text-align:center;
+  color:var(--paper-dim);
+  font-size:12px;
+  text-transform:uppercase;
+  letter-spacing:0.1em;
+  margin:6px 0 20px;
+}
+.login-error{
+  color:var(--red);
+  font-size:12px;
+  margin-bottom:12px;
+}
+
 /* ---------- In-page presentation overlay (single-monitor mode) ---------- */
 .hidden{ display:none !important; }
 .present-overlay{
   position:fixed; inset:0;
-  background:#060c17;
+  background:#050505;
   color:#eef3fa;
   display:none;
   align-items:center;
@@ -373,8 +460,8 @@ body{
 }
 #present-text-2{
   padding-top:3.6vh;
-  border-top:1px solid rgba(238,243,250,0.14);
-  color:rgba(238,243,250,0.7);
+  border-top:1px solid rgba(245,245,245,0.14);
+  color:rgba(245,245,245,0.7);
 }
 #present-text.lang-mal, #present-text-2.lang-mal, #present-title.lang-mal{ font-family:'Noto Sans Malayalam', var(--font-display); }
 #present-text.lang-hin, #present-text-2.lang-hin, #present-title.lang-hin{ font-family:'Noto Sans Devanagari', var(--font-display); }
@@ -382,7 +469,7 @@ body{
   margin-top:3.4vh;
   font-family:var(--font-ui);
   font-size:calc(1.05vw * var(--font-scale));
-  color:rgba(238,243,250,0.55);
+  color:rgba(245,245,245,0.55);
   letter-spacing:0.04em;
 }
 #present-idle{
@@ -392,7 +479,7 @@ body{
   font-size:12px;
   letter-spacing:0.2em;
   text-transform:uppercase;
-  color:rgba(238,243,250,0.18);
+  color:rgba(245,245,245,0.18);
 }
 #present-blank-overlay{
   position:fixed; inset:0;
@@ -408,6 +495,6 @@ body{
   font-family:var(--font-ui);
   font-size:11px;
   letter-spacing:0.08em;
-  color:rgba(238,243,250,0.35);
+  color:rgba(245,245,245,0.35);
   z-index:110;
 }

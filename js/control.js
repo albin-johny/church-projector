@@ -676,12 +676,58 @@
     if (e.key === ' ' || e.key === 'Enter') { e.preventDefault(); startCurrentSelectionLive(); }
   });
 
-  /* ---------------- Boot ---------------- */
-  (async function init() {
+  /* ---------------- Theme (control panel only — display stays dark) ---------------- */
+  const THEME_KEY = 'cp_theme';
+  function applyTheme(theme) {
+    document.documentElement.dataset.theme = theme;
+    $('#btn-theme-toggle').textContent = theme === 'light' ? '☾' : '☀';
+  }
+  $('#btn-theme-toggle').addEventListener('click', () => {
+    const next = document.documentElement.dataset.theme === 'light' ? 'dark' : 'light';
+    localStorage.setItem(THEME_KEY, next);
+    applyTheme(next);
+  });
+
+  /* ---------------- Login gate ---------------- */
+  async function startApp() {
+    applyTheme(localStorage.getItem(THEME_KEY) === 'light' ? 'light' : 'dark');
     state.fontScale = ProjectorLink.getFontScale();
     applyFontScale();
     await SongStore.seedIfEmpty();
     renderList();
     renderStage();
-  })();
+  }
+
+  function showApp() {
+    $('#login-overlay').classList.add('hidden');
+    $('#app-root').classList.remove('hidden');
+    startApp();
+  }
+
+  $('#login-form').addEventListener('submit', (e) => {
+    e.preventDefault();
+    const u = $('#f-login-user').value.trim();
+    const p = $('#f-login-pass').value;
+    if (Auth.login(u, p)) {
+      $('#login-error').classList.add('hidden');
+      showApp();
+    } else {
+      $('#login-error').classList.remove('hidden');
+      $('#f-login-pass').value = '';
+      $('#f-login-pass').focus();
+    }
+  });
+
+  $('#btn-logout').addEventListener('click', () => {
+    if (!confirm('Log out of the control panel?')) return;
+    Auth.logout();
+    location.reload();
+  });
+
+  /* ---------------- Boot ---------------- */
+  if (Auth.isLoggedIn()) {
+    showApp();
+  } else {
+    $('#f-login-user').focus();
+  }
 })();

@@ -9,12 +9,18 @@
 <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
-<div class="app">
+<div class="app hidden" id="app-root">
 
   <!-- LEFT: library rail -->
   <div class="rail">
     <div class="rail-header">
-      <div class="mark">Verse<em>Deck</em></div>
+      <div class="rail-header-top">
+        <div class="mark">Verse<em>Deck</em></div>
+        <div class="rail-header-actions">
+          <button class="theme-toggle" id="btn-theme-toggle" title="Switch light/dark theme">☀</button>
+          <button class="theme-toggle" id="btn-logout" title="Log out">⎋</button>
+        </div>
+      </div>
       <div class="sub" id="library-count">Loading library…</div>
     </div>
     <div class="tabs">
@@ -82,9 +88,27 @@
   <div class="present-hint">Up/Down or Space to navigate · Esc to exit</div>
 </div>
 
+<div class="login-overlay" id="login-overlay">
+  <form class="login-box" id="login-form">
+    <div class="mark">Verse<em>Deck</em></div>
+    <div class="meta">Sign in to open the control panel</div>
+    <div class="field">
+      <label>Username</label>
+      <input type="text" id="f-login-user" autocomplete="username" autocapitalize="off" spellcheck="false">
+    </div>
+    <div class="field">
+      <label>Password</label>
+      <input type="password" id="f-login-pass" autocomplete="current-password">
+    </div>
+    <div class="login-error hidden" id="login-error">Incorrect username or password.</div>
+    <button type="submit" class="btn btn-gold" style="width:100%;">Log in</button>
+  </form>
+</div>
+
 <div class="toast" id="toast"></div>
 
 <script src="js/link.js"></script>
+<script src="js/auth.js"></script>
 <script src="js/store.js"></script>
 <script src="js/bible.js"></script>
 <script src="js/control.js"></script>
