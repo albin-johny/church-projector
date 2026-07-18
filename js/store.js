@@ -65,12 +65,21 @@ const SongStore = (() => {
     return song.inSetlist;
   }
 
+  // A slide is either a plain string, or a { text, en } pair for
+  // Malayalam/Hindi songs (native script + Manglish/English shown together
+  // while presenting).
+  function slideText(slide) {
+    if (typeof slide === 'string') return slide;
+    if (slide && typeof slide === 'object') return [slide.text, slide.en].filter(Boolean).join(' ');
+    return '';
+  }
+
   function search(query, langFilter) {
     const q = (query || '').trim().toLowerCase();
     return getAll().filter(s => {
       if (langFilter && langFilter !== 'all' && s.language !== langFilter) return false;
       if (!q) return true;
-      const hay = (s.title + ' ' + (s.tags || []).join(' ') + ' ' + s.slides.join(' ')).toLowerCase();
+      const hay = (s.title + ' ' + (s.tags || []).join(' ') + ' ' + s.slides.map(slideText).join(' ')).toLowerCase();
       return hay.includes(q);
     });
   }

@@ -70,9 +70,19 @@ church-projector/
 {
   id: "s_...",
   title: "Amazing Grace",
-  language: "en" | "ml" | "hi" | "bi",   // bi = bilingual/mixed
+  language: "en" | "ml" | "hi",
   tags: ["hymn", "grace"],
+  // language === "en": slides are plain strings, one per projector slide.
   slides: ["slide 1 text", "slide 2 text", ...],
+  // language === "ml" or "hi": slides are { text, en } pairs instead — the
+  // native-script lyrics plus a Manglish/English transliteration, shown
+  // stacked together while presenting (same text/text2 mechanism the
+  // Bible dual-language mode uses). Either side of a pair can be blank,
+  // but not both — enforced in control.js's saveSongFromEditor().
+  // SongStore.search() and control.js's songToLiveSlides()/
+  // isDualTextSong()/hasSecondLangBox() know how to read both slide
+  // shapes; anything that touches song.slides directly needs to check
+  // typeof slide first.
   updatedAt: <timestamp>
 }
 ```
@@ -102,8 +112,11 @@ church-projector/
   navigates away from it.
 - Bible reference jump box (e.g. typing "John 3:16" directly) doesn't exist yet — currently
   book/chapter dropdowns + verse-from/verse-to number fields only.
-- No dark/light theme toggle — display.html is intentionally always dark/black for projector
-  legibility; that's a deliberate choice, not an oversight.
+- Light/dark theme toggle (☀/☾ button in the control panel rail header) now applies everywhere:
+  the control panel, the in-page "Present on this screen" overlay, and any popup `display.html`
+  window. Persisted in `localStorage` (`cp_theme`) and broadcast live via `ProjectorLink.setTheme()`
+  so an already-open display window updates without a reload. This reverses an earlier design
+  decision to always keep the projector output dark — the operator asked for it to follow theme.
 
 ## Person's environment
 

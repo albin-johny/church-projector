@@ -1,5 +1,6 @@
 :root{
   --stage-bg:#000000;
+  --stage-text-rgb: 245,245,245;
   --stage-text:#f5f5f5;
   --stage-dim: rgba(245,245,245,0.55);
   --gold:#f5f5f5;
@@ -8,6 +9,17 @@
   /* Manual override set from the control panel's A-/A+ buttons, to
      compensate for a projector that crops/letterboxes the image edges. */
   --font-scale: 1;
+}
+
+/* Light theme — toggled from the control panel (data-theme attribute set
+   here in JS via display.js, synced through ProjectorLink so the popup
+   window matches whatever the operator last chose). */
+:root[data-theme="light"]{
+  --stage-bg:#ffffff;
+  --stage-text-rgb: 20,20,20;
+  --stage-text:#141414;
+  --stage-dim: rgba(20,20,20,0.55);
+  --gold:#141414;
 }
 *{box-sizing:border-box;}
 html,body{
@@ -28,7 +40,7 @@ body.show-cursor{ cursor:default; }
 
 #blank-overlay{
   position:fixed; inset:0;
-  background:#000;
+  background:var(--stage-bg);
   opacity:0;
   pointer-events:none;
   transition:opacity 0.35s ease;
@@ -69,7 +81,7 @@ body.show-cursor{ cursor:default; }
 
 #main-text-2{
   padding-top:3.6vh;
-  border-top:1px solid rgba(245,245,245,0.14);
+  border-top:1px solid rgba(var(--stage-text-rgb),0.14);
   color:var(--stage-dim);
 }
 
@@ -93,7 +105,7 @@ body.show-cursor{ cursor:default; }
   font-size:12px;
   letter-spacing:0.2em;
   text-transform:uppercase;
-  color:rgba(245,245,245,0.18);
+  color:rgba(var(--stage-text-rgb),0.18);
 }
 
 .hidden{ display:none !important; }

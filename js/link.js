@@ -21,6 +21,7 @@ const ProjectorLink = (() => {
     window.addEventListener('storage', (e) => {
       if (e.key === LS_KEY && e.newValue) cb(JSON.parse(e.newValue));
       if (e.key === FONT_SCALE_KEY && e.newValue) cb({ type: 'fontscale', scale: parseFloat(e.newValue) });
+      if (e.key === THEME_KEY && e.newValue) cb({ type: 'theme', theme: e.newValue });
     });
   }
 
@@ -46,6 +47,21 @@ const ProjectorLink = (() => {
     return isNaN(n) ? 1 : n;
   }
 
+  // Light/dark theme — the operator toggles it in the control panel, and it
+  // applies to the control panel itself, the in-page Present overlay (same
+  // document), and any popup display.html window (synced here). Persisted
+  // so a freshly opened display window picks up the last-set theme even if
+  // it missed the broadcast.
+  const THEME_KEY = 'cp_theme';
+  function setTheme(theme) {
+    localStorage.setItem(THEME_KEY, theme);
+    const msg = { type: 'theme', theme, ts: Date.now() };
+    if (bc) bc.postMessage(msg);
+  }
+  function getTheme() {
+    return localStorage.getItem(THEME_KEY) === 'light' ? 'light' : 'dark';
+  }
+
   // Shared between display.js and control.js's in-page presentation overlay,
   // so long verses (or a verse + its second-language pairing) shrink to fit
   // instead of overflowing the stage.
@@ -57,5 +73,5 @@ const ProjectorLink = (() => {
     return 'clamp(28px, 4.6vw, 82px)';
   }
 
-  return { send, onMessage, lastMessage, pickFontSize, setFontScale, getFontScale };
+  return { send, onMessage, lastMessage, pickFontSize, setFontScale, getFontScale, setTheme, getTheme };
 })();

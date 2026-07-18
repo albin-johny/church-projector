@@ -104,18 +104,57 @@
     return (s || '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   }
 
+  // Malayalam and Hindi songs always get a second "Manglish/English"
+  // transliteration box alongside the native-script lyrics — English songs
+  // don't need one. When a song has this, its slides are { text, en } pairs
+  // instead of plain strings (either side can be blank, but not both,
+  // enforced at save time). Reuses the same text/text2 shape the Bible
+  // dual-language mode already pushes to the display, so both languages
+  // show stacked together while presenting.
+  function hasSecondLangBox(language) {
+    return language === 'ml' || language === 'hi';
+  }
+  function isDualTextSong(song) {
+    return hasSecondLangBox(song.language) && song.slides.length > 0 && typeof song.slides[0] === 'object';
+  }
+  function buildDualSlide(text, en, i, total, title, lang) {
+    const ref = `${i + 1}/${total}`;
+    if (text && en) return { text, text2: en, ref, title, lang, lang2: 'en' };
+    if (text) return { text, ref, title, lang };
+    return { text: en, ref, title, lang: 'en' };
+  }
+  function songToLiveSlides(song) {
+    if (isDualTextSong(song)) {
+      return song.slides.map((s, i) => buildDualSlide(s.text, s.en, i, song.slides.length, song.title, song.language));
+    }
+    return song.slides.map((t, i) => ({ text: t, ref: `${i + 1}/${song.slides.length}`, title: song.title, lang: song.language }));
+  }
+
   /* ---------------- Song editor (center stage) ---------------- */
   function loadSongIntoEditor(id) {
     const song = SongStore.get(id);
-    state.editingDraft = song
-      ? { id: song.id, title: song.title, language: song.language, tags: (song.tags || []).join(', '), slidesText: song.slides.join('\n\n') }
-      : null;
+    if (!song) { state.editingDraft = null; return; }
+    const base = { id: song.id, title: song.title, language: song.language, tags: (song.tags || []).join(', ') };
+    if (isDualTextSong(song)) {
+      state.editingDraft = Object.assign(base, {
+        slidesText: '',
+        slidesTextPrimary: song.slides.map(s => s.text || '').join('\n\n'),
+        slidesTextEn: song.slides.map(s => s.en || '').join('\n\n')
+      });
+    } else if (hasSecondLangBox(song.language)) {
+      // Malayalam/Hindi song saved before this feature existed — its slides
+      // are plain strings. Land them in the native-script box so nothing is
+      // lost; the operator can fill in the English box if they want it.
+      state.editingDraft = Object.assign(base, { slidesText: '', slidesTextPrimary: song.slides.join('\n\n'), slidesTextEn: '' });
+    } else {
+      state.editingDraft = Object.assign(base, { slidesText: song.slides.join('\n\n'), slidesTextPrimary: '', slidesTextEn: '' });
+    }
   }
 
   function newSongDraft() {
     state.selectedSongId = null;
     state.songMode = 'edit';
-    state.editingDraft = { id: null, title: '', language: 'en', tags: '', slidesText: '' };
+    state.editingDraft = { id: null, title: '', language: 'en', tags: '', slidesText: '', slidesTextPrimary: '', slidesTextEn: '' };
     setTab('songs');
     renderStage();
   }
@@ -162,12 +201,18 @@
       renderStage();
     });
     const box = $('#slide-preview');
-    box.innerHTML = song.slides.map((s, i) => `
-      <div class="verse-slide" data-i="${i}">
-        <span class="slide-label">Slide ${i + 1} of ${song.slides.length} — click to show</span>${escapeHtml(s)}
-      </div>`).join('');
+    const dual = isDualTextSong(song);
+    box.innerHTML = song.slides.map((s, i) => dual
+      ? `<div class="verse-slide" data-i="${i}">
+          <span class="slide-label">Slide ${i + 1} of ${song.slides.length} — click to show</span>
+          ${s.text ? escapeHtml(s.text) : `<span class="slide-missing">(no ${langLabel(song.language)})</span>`}
+          ${s.en ? `<div class="verse-slide-secondary">${escapeHtml(s.en)}</div>` : ''}
+        </div>`
+      : `<div class="verse-slide" data-i="${i}">
+          <span class="slide-label">Slide ${i + 1} of ${song.slides.length} — click to show</span>${escapeHtml(s)}
+        </div>`).join('');
     $$('#slide-preview .verse-slide').forEach(el => el.addEventListener('click', () => {
-      state.liveSlides = song.slides.map((t, i) => ({ text: t, ref: `${i + 1}/${song.slides.length}`, title: song.title, lang: song.language }));
+      state.liveSlides = songToLiveSlides(song);
       state.liveIndex = Number(el.dataset.i);
       pushLive();
     }));
@@ -192,7 +237,6 @@
             <option value="en" ${d.language === 'en' ? 'selected' : ''}>English</option>
             <option value="ml" ${d.language === 'ml' ? 'selected' : ''}>Malayalam</option>
             <option value="hi" ${d.language === 'hi' ? 'selected' : ''}>Hindi</option>
-            <option value="bi" ${d.language === 'bi' ? 'selected' : ''}>Bilingual / mixed</option>
           </select>
         </div>
         <div class="field">
@@ -200,11 +244,23 @@
           <input type="text" id="f-tags" value="${escapeHtml(d.tags)}" placeholder="hymn, worship, christmas">
         </div>
       </div>
+      ${hasSecondLangBox(d.language) ? `
+      <div class="field">
+        <label>${langLabel(d.language)} — separate each stanza with a blank line</label>
+        <textarea id="f-slides-primary" placeholder="യേശുവിൻ നാമം വിജയിക്കട്ടെ&#10;സാത്താന്യ കോട്ടകൾ തകർന്നിടട്ടെ&#10;&#10;പോകുക നാം... പോർവീരരായ്…">${escapeHtml(d.slidesTextPrimary)}</textarea>
+      </div>
+      <div class="field">
+        <label>Manglish / English transliteration — same stanza order</label>
+        <textarea id="f-slides-en" placeholder="yeshuvin naamam vijayikkatte&#10;sathanya kottakal thakarnnidatte&#10;&#10;pokuka naam.. por veerarayi">${escapeHtml(d.slidesTextEn)}</textarea>
+        <div class="hint">Both boxes are optional per stanza, but every stanza needs at least one of the two filled in. Match the blank-line breaks between the two boxes so stanzas line up — the two are paired by position, not by matching text.</div>
+      </div>
+      ` : `
       <div class="field">
         <label>Slides — separate each projector slide with a blank line</label>
         <textarea id="f-slides" placeholder="Amazing grace, how sweet the sound&#10;That saved a wretch like me...&#10;&#10;I once was lost, but now am found&#10;Was blind but now I see.">${escapeHtml(d.slidesText)}</textarea>
         <div class="hint">Paste lyrics you already use in service — a blank line between verses/chorus becomes a new slide.</div>
       </div>
+      `}
       <div class="row">
         <button class="btn btn-gold" id="btn-save-song">Save song</button>
         <button class="btn" id="btn-cancel-edit">Cancel</button>
@@ -213,9 +269,14 @@
       <div id="slide-preview" class="verse-slides"></div>
     `;
     $('#f-title').addEventListener('input', () => d.title = $('#f-title').value);
-    $('#f-lang').addEventListener('change', () => d.language = $('#f-lang').value);
+    $('#f-lang').addEventListener('change', () => { d.language = $('#f-lang').value; renderStage(); });
     $('#f-tags').addEventListener('input', () => d.tags = $('#f-tags').value);
-    $('#f-slides').addEventListener('input', () => { d.slidesText = $('#f-slides').value; renderSlidePreview(); });
+    if (hasSecondLangBox(d.language)) {
+      $('#f-slides-primary').addEventListener('input', () => { d.slidesTextPrimary = $('#f-slides-primary').value; renderSlidePreview(); });
+      $('#f-slides-en').addEventListener('input', () => { d.slidesTextEn = $('#f-slides-en').value; renderSlidePreview(); });
+    } else {
+      $('#f-slides').addEventListener('input', () => { d.slidesText = $('#f-slides').value; renderSlidePreview(); });
+    }
     $('#btn-save-song').addEventListener('click', saveSongFromEditor);
     $('#btn-cancel-edit').addEventListener('click', () => {
       if (d.id) { state.songMode = 'view'; }
@@ -238,8 +299,25 @@
     return text.split(/\n\s*\n/).map(s => s.trim()).filter(Boolean);
   }
 
+  // { text, en } pairs built from the two textareas, matched by stanza
+  // position. A stanza is dropped only if both sides are blank.
+  function buildDualPairs(d) {
+    const primarySlides = parseSlides(d.slidesTextPrimary || '');
+    const enSlides = parseSlides(d.slidesTextEn || '');
+    const count = Math.max(primarySlides.length, enSlides.length);
+    const pairs = [];
+    for (let i = 0; i < count; i++) {
+      const text = primarySlides[i] || '';
+      const en = enSlides[i] || '';
+      if (!text && !en) continue;
+      pairs.push({ text, en });
+    }
+    return pairs;
+  }
+
   function renderSlidePreview() {
     const d = state.editingDraft;
+    if (hasSecondLangBox(d.language)) { renderDualSlidePreview(d); return; }
     const slides = parseSlides(d.slidesText);
     const box = $('#slide-preview');
     if (!slides.length) { box.innerHTML = ''; return; }
@@ -255,11 +333,35 @@
     }));
   }
 
+  function renderDualSlidePreview(d) {
+    const pairs = buildDualPairs(d);
+    const box = $('#slide-preview');
+    if (!pairs.length) { box.innerHTML = ''; return; }
+    box.innerHTML = pairs.map((p, i) => `
+      <div class="verse-slide" data-i="${i}">
+        <span class="slide-label">Slide ${i + 1} of ${pairs.length} — click to show</span>
+        ${p.text ? escapeHtml(p.text) : `<span class="slide-missing">(no ${langLabel(d.language)})</span>`}
+        ${p.en ? `<div class="verse-slide-secondary">${escapeHtml(p.en)}</div>` : ''}
+      </div>`).join('');
+    $$('.verse-slide').forEach(el => el.addEventListener('click', () => {
+      const pairs2 = buildDualPairs(d);
+      state.liveSlides = pairs2.map((p, i) => buildDualSlide(p.text, p.en, i, pairs2.length, d.title || 'Untitled', d.language));
+      state.liveIndex = Number(el.dataset.i);
+      pushLive();
+    }));
+  }
+
   function saveSongFromEditor() {
     const d = state.editingDraft;
     if (!d.title.trim()) { toast('Give the song a title first'); return; }
-    const slides = parseSlides(d.slidesText);
-    if (!slides.length) { toast('Add at least one slide of lyrics'); return; }
+    let slides;
+    if (hasSecondLangBox(d.language)) {
+      slides = buildDualPairs(d);
+      if (!slides.length) { toast(`Add ${langLabel(d.language)} and/or Manglish lyrics for at least one stanza`); return; }
+    } else {
+      slides = parseSlides(d.slidesText);
+      if (!slides.length) { toast('Add at least one slide of lyrics'); return; }
+    }
     const saved = SongStore.save({
       id: d.id,
       title: d.title.trim(),
@@ -578,6 +680,14 @@
   }
   $('#btn-present').addEventListener('click', openPresentMode);
 
+  // Double-clicking any slide (song, Bible, or Custom) opens/focuses the
+  // in-page Present overlay on that slide — the preceding single-click
+  // (fired first, by the browser's own click/dblclick sequencing) already
+  // pushed it live, so this just needs to bring the overlay up.
+  document.addEventListener('dblclick', (e) => {
+    if (e.target.closest('.verse-slide')) openPresentMode();
+  });
+
   // Manual font-size override — compensates for a projector that crops or
   // letterboxes the edges of the image, independent of the automatic
   // length-based sizing. Applies to the control panel's own document (which
@@ -608,7 +718,7 @@
   function startSelectedSongLive() {
     const song = state.selectedSongId ? SongStore.get(state.selectedSongId) : null;
     if (!song || !song.slides.length) return;
-    state.liveSlides = song.slides.map((t, i) => ({ text: t, ref: `${i + 1}/${song.slides.length}`, title: song.title, lang: song.language }));
+    state.liveSlides = songToLiveSlides(song);
     state.liveIndex = 0;
     pushLive();
   }
@@ -676,21 +786,23 @@
     if (e.key === ' ' || e.key === 'Enter') { e.preventDefault(); startCurrentSelectionLive(); }
   });
 
-  /* ---------------- Theme (control panel only — display stays dark) ---------------- */
-  const THEME_KEY = 'cp_theme';
+  /* ---------------- Theme (control panel + presentation surfaces) ---------------- */
+  // Applies to this document (control panel UI + the in-page Present
+  // overlay, since they share a document) and is broadcast via
+  // ProjectorLink so a popup display.html window matches too.
   function applyTheme(theme) {
     document.documentElement.dataset.theme = theme;
     $('#btn-theme-toggle').textContent = theme === 'light' ? '☾' : '☀';
   }
   $('#btn-theme-toggle').addEventListener('click', () => {
     const next = document.documentElement.dataset.theme === 'light' ? 'dark' : 'light';
-    localStorage.setItem(THEME_KEY, next);
+    ProjectorLink.setTheme(next);
     applyTheme(next);
   });
 
   /* ---------------- Login gate ---------------- */
   async function startApp() {
-    applyTheme(localStorage.getItem(THEME_KEY) === 'light' ? 'light' : 'dark');
+    applyTheme(ProjectorLink.getTheme());
     state.fontScale = ProjectorLink.getFontScale();
     applyFontScale();
     await SongStore.seedIfEmpty();

@@ -11,16 +11,21 @@
   --green:#6b9e7c;
   --red:#c2564d;
   --font-scale: 1;
+  /* Presentation stage colors (in-page Present overlay) — mirrors
+     display.html's own theme-aware variables so both surfaces flip
+     together with the same toggle. */
+  --stage-bg:#000000;
+  --stage-text-rgb: 245,245,245;
   --font-display: 'Fraunces', Georgia, 'Times New Roman', serif;
   --font-ui: 'Hanken Grotesk', 'Segoe UI', system-ui, sans-serif;
   --font-mono: 'JetBrains Mono', 'Consolas', monospace;
 }
 
-/* Light theme for the control panel only — the projector display and the
-   in-page Present overlay intentionally stay black/dark regardless (see
-   CONTEXT.md: dark-for-projector-legibility is a deliberate choice, not
-   tied to the operator's own UI preference). Toggled via a data-theme
-   attribute on <html>, set from control.js and persisted in localStorage. */
+/* Light theme — applies to both the control panel and the presentation
+   surfaces (in-page Present overlay here, plus display.html via its own
+   stylesheet). Toggled via a data-theme attribute on <html>, set from
+   control.js and persisted/broadcast via ProjectorLink so a popup display
+   window and the control panel always agree. */
 :root[data-theme="light"]{
   --ink:#f7f7f5;
   --ink-soft:#ececea;
@@ -33,6 +38,8 @@
   --gold-text:#fafafa;
   --green:#3f7a52;
   --red:#b23b30;
+  --stage-bg:#ffffff;
+  --stage-text-rgb: 20,20,20;
 }
 
 *{box-sizing:border-box;}
@@ -270,6 +277,7 @@ body{
 .verse-slide.live{ background:var(--gold-soft); border-color:var(--gold); }
 .verse-slide .slide-label{ font-family:var(--font-ui); font-size:10px; text-transform:uppercase; letter-spacing:0.08em; color:var(--gold); display:block; margin-bottom:4px; }
 .verse-slide-secondary{ margin-top:8px; padding-top:8px; border-top:1px dashed var(--line); color:var(--paper-dim); }
+.slide-missing{ color:var(--paper-dim); font-style:italic; font-size:13px; }
 
 /* ---------- Right: live preview / display control ---------- */
 .preview-pane{
@@ -431,8 +439,8 @@ body{
 .hidden{ display:none !important; }
 .present-overlay{
   position:fixed; inset:0;
-  background:#050505;
-  color:#eef3fa;
+  background:var(--stage-bg);
+  color:rgb(var(--stage-text-rgb));
   display:none;
   align-items:center;
   justify-content:center;
@@ -460,8 +468,8 @@ body{
 }
 #present-text-2{
   padding-top:3.6vh;
-  border-top:1px solid rgba(245,245,245,0.14);
-  color:rgba(245,245,245,0.7);
+  border-top:1px solid rgba(var(--stage-text-rgb),0.14);
+  color:rgba(var(--stage-text-rgb),0.7);
 }
 #present-text.lang-mal, #present-text-2.lang-mal, #present-title.lang-mal{ font-family:'Noto Sans Malayalam', var(--font-display); }
 #present-text.lang-hin, #present-text-2.lang-hin, #present-title.lang-hin{ font-family:'Noto Sans Devanagari', var(--font-display); }
@@ -469,7 +477,7 @@ body{
   margin-top:3.4vh;
   font-family:var(--font-ui);
   font-size:calc(1.05vw * var(--font-scale));
-  color:rgba(245,245,245,0.55);
+  color:rgba(var(--stage-text-rgb),0.55);
   letter-spacing:0.04em;
 }
 #present-idle{
@@ -479,11 +487,11 @@ body{
   font-size:12px;
   letter-spacing:0.2em;
   text-transform:uppercase;
-  color:rgba(245,245,245,0.18);
+  color:rgba(var(--stage-text-rgb),0.18);
 }
 #present-blank-overlay{
   position:fixed; inset:0;
-  background:#000;
+  background:var(--stage-bg);
   opacity:0;
   pointer-events:none;
   transition:opacity 0.35s ease;
@@ -495,6 +503,6 @@ body{
   font-family:var(--font-ui);
   font-size:11px;
   letter-spacing:0.08em;
-  color:rgba(245,245,245,0.35);
+  color:rgba(var(--stage-text-rgb),0.35);
   z-index:110;
 }

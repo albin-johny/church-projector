@@ -17,10 +17,18 @@
     document.documentElement.style.setProperty('--font-scale', scale);
   }
 
+  function applyTheme(theme) {
+    document.documentElement.dataset.theme = theme;
+  }
+
   function render(msg) {
     if (!msg) return;
     if (msg.type === 'fontscale') {
       applyFontScale(msg.scale);
+      return;
+    }
+    if (msg.type === 'theme') {
+      applyTheme(msg.theme);
       return;
     }
     if (msg.type === 'blank') {
@@ -63,9 +71,10 @@
   }
 
   ProjectorLink.onMessage(render);
-  // Pick up whatever was already live (and whatever font scale was last set)
-  // when this window opens.
+  // Pick up whatever was already live (and whatever font scale/theme was
+  // last set) when this window opens.
   applyFontScale(ProjectorLink.getFontScale());
+  applyTheme(ProjectorLink.getTheme());
   render(ProjectorLink.lastMessage());
 
   // Local convenience shortcuts (also controllable from the panel).
