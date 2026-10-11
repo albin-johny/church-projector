@@ -14,14 +14,26 @@ const BibleAPI = (() => {
     hi: { label: 'Hindi' }
   };
 
-  // One blessed translation per language — see data/bible/README.md.
+  // Translations offered per language. The FIRST entry is the default (and the one used
+  // for the second-language box in dual mode). The en_ukjv / ml_bsi / hi_unicode files are
+  // generated from the .db sources by scripts/convert_bible_db.py.
   const TRANSLATIONS = {
-    en: { id: 'eng_kjv', file: 'data/bible/en.json' },
-    ml: { id: 'mal_fbf', file: 'data/bible/ml.json' },
-    hi: { id: 'HINIRV', file: 'data/bible/hi.json' }
+    en: [
+      { id: 'eng_kjv',  file: 'data/bible/en.json',          label: 'KJV' },
+      { id: 'eng_ukjv', file: 'data/bible/en_ukjv.json',    label: 'UKJV' },
+      { id: 'eng_niv',  file: 'data/bible/en_niv.json',     label: 'NIV' }
+    ],
+    ml: [
+      { id: 'mal_fbf', file: 'data/bible/ml.json',         label: 'Malayalam 1910' },
+      { id: 'mal_bsi', file: 'data/bible/ml_bsi.json',     label: 'Malayalam BSI' }
+    ],
+    hi: [
+      { id: 'HINIRV',      file: 'data/bible/hi.json',          label: 'Hindi IRV' },
+      { id: 'hin_unicode', file: 'data/bible/hi_unicode.json',  label: 'Hindi BSI' }
+    ]
   };
   const FILE_BY_ID = {};
-  Object.values(TRANSLATIONS).forEach(t => { FILE_BY_ID[t.id] = t.file; });
+  Object.values(TRANSLATIONS).flat().forEach(t => { FILE_BY_ID[t.id] = t.file; });
 
   const _cache = {}; // translationId -> parsed complete.json
 
@@ -37,20 +49,25 @@ const BibleAPI = (() => {
   }
 
   async function getTranslationsForLang(langKey) {
-    const t = TRANSLATIONS[langKey];
-    if (!t) return [];
-    const data = await loadById(t.id);
-    return [{
-      id: data.translation.id,
-      shortName: data.translation.shortName,
-      englishName: data.translation.englishName,
-      language: data.translation.language
-    }];
+    const list = TRANSLATIONS[langKey] || [];
+    // Loaded one after another so only the (cached) files actually needed are fetched.
+    const out = [];
+    for (const t of list) {
+      const data = await loadById(t.id);
+      out.push({
+        id: data.translation.id,
+        shortName: data.translation.shortName,
+        label: t.label || data.translation.shortName,
+        englishName: data.translation.englishName,
+        language: data.translation.language
+      });
+    }
+    return out;
   }
 
   async function getBooks(translationId) {
     const data = await loadById(translationId);
-    return data.books.map(b => ({ id: b.id, name: b.name, commonName: b.commonName }));
+    return data.books.map(b => ({ id: b.id, name: b.name, commonName: b.commonName, chapters: b.chapters.length }));
   }
 
   async function getChapter(translationId, bookId, chapterNum) {
@@ -104,5 +121,17 @@ const BibleAPI = (() => {
     return slides;
   }
 
-  return { LANGS, getTranslationsForLang, getBooks, getChapter, extractVerses, buildSlides };
+  // Every bundled version across all languages, synchronously (no file loads):
+  // [{ id, label, langKey, langLabel }]. Used for the version dropdowns.
+  function getVersionList() {
+    const out = [];
+    Object.keys(TRANSLATIONS).forEach(langKey => {
+      TRANSLATIONS[langKey].forEach(t => out.push({
+        id: t.id, label: t.label || t.id, langKey, langLabel: (LANGS[langKey] || {}).label || langKey
+      }));
+    });
+    return out;
+  }
+
+  return { getVersionList, LANGS, getTranslationsForLang, getBooks, getChapter, extractVerses, buildSlides };
 })();
