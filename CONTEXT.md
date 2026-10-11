@@ -220,6 +220,14 @@ church-projector/
 - The control panel's mini preview uses the stage background/text colours so it follows the
   theme.
 
+## Keep-alive
+
+`.github/workflows/keep-alive.yml` (GitHub Actions) sends one read request to Supabase every
+3 days (and on manual "Run workflow") so the free tier doesn't pause after ~7 idle days. It
+uses the public URL + publishable key and expects HTTP 200 from `live_state`. GitHub disables
+scheduled workflows after 60 days without repo activity — re-enable under the Actions tab if
+that ever happens.
+
 ## Current status / what's working
 
 - Login (Supabase Auth), shared song library in Postgres (add/edit/delete/search/bookmark/
@@ -230,8 +238,7 @@ church-projector/
 
 ## Pending / next (paused items)
 
-- **Keep-alive ping** — free tier pauses after ~7 days idle (e.g. scheduled GitHub Action or
-  cron-job.org request).
+
 - **Subdomain**: point the church subdomain (GoDaddy DNS CNAME → Vercel), add it in Vercel and
   in Supabase allowed URLs; decide whether to rotate the old git-history password / make the
   repo private (NIV text is in the repo).
