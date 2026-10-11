@@ -237,6 +237,10 @@ church-projector/
   repo private (NIV text is in the repo).
 - **README.md is stale** (still describes localStorage-only + manual export sharing).
 - **Importer** (web scraping with attribution) — last, runs outside the app, copyright caveat.
+- **Mobile layout for the control panel** — under 980px wide the three columns just stack into one
+  long page (library, stage, live controls), which is cumbersome on a phone. Planned: preview at
+  the top, a sticky bottom bar with Prev / Next / Blank / Clear, and the song/verse list below.
+  Tablets in landscape already get the normal three-column layout.
 - **Ordered service setlist** (today only unordered bookmarks).
 - Bible reference jump box ("John 3:16").
 - Keyboard shortcut cheatsheet in the UI; "which song is live" indicator; undo for delete.
