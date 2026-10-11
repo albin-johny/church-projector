@@ -9,7 +9,7 @@
 <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
-<div class="app hidden" id="app-root">
+<div class="app view-list hidden" id="app-root">
 
   <!-- LEFT: library rail -->
   <div class="rail">
@@ -40,6 +40,9 @@
       <input type="file" id="file-import" accept="application/json" style="display:none">
     </div>
   </div>
+
+  <!-- Mobile only: back from the content view to the library list -->
+  <button class="btn btn-small" id="btn-mobile-back">← Back to list</button>
 
   <!-- CENTER: editor / bible picker -->
   <div class="stage" id="stage"></div>

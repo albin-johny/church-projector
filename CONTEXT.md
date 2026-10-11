@@ -211,6 +211,17 @@ church-projector/
   present overlay (`#present-footer`) show the reference prominently at bottom-centre with the
   versions small underneath; `pushLive()` blanks the top title and verse-number line for them.
 
+## Mobile / portrait-tablet control layout (<= 900px)
+
+- One screen at a time: header + tabs on top, then either the library list (`.app.view-list`)
+  or the content (`.app.view-stage`: song / chapter verses / editor / custom), toggled by
+  `setMobileView()` in `control.js`; a "← Back to list" button (`#btn-mobile-back`) returns.
+  Picking a song, a Bible chapter, "+ New song" or the Custom tab opens the content view.
+- The preview pane becomes a bottom dock: status dots, a small preview, and Prev / Next /
+  Blank / Clear. Font scale, open-display/present buttons, pairing row and hints are hidden
+  there (use desktop for those). `.rail` is `display: contents` so its pieces are direct flex
+  children of `.app`. Desktop (> 900px) keeps the three-column grid; view classes do nothing.
+
 ## Projector display layout
 
 - The text area (`#stage-inner`) is a flex child above the footer, so long verses can't run
@@ -238,16 +249,15 @@ that ever happens.
 
 ## Pending / next (paused items)
 
+- **Keep-alive caveat**: GitHub disables the scheduled workflow after 60 days without commits;
+  the operator chose to find a workaround later (e.g. cron-job.org ping, or a Vercel cron).
+
 
 - **Subdomain**: point the church subdomain (GoDaddy DNS CNAME → Vercel), add it in Vercel and
   in Supabase allowed URLs; decide whether to rotate the old git-history password / make the
   repo private (NIV text is in the repo).
 - **README.md is stale** (still describes localStorage-only + manual export sharing).
 - **Importer** (web scraping with attribution) — last, runs outside the app, copyright caveat.
-- **Mobile layout for the control panel** — under 980px wide the three columns just stack into one
-  long page (library, stage, live controls), which is cumbersome on a phone. Planned: preview at
-  the top, a sticky bottom bar with Prev / Next / Blank / Clear, and the song/verse list below.
-  Tablets in landscape already get the normal three-column layout.
 - **Ordered service setlist** (today only unordered bookmarks).
 - Bible reference jump box ("John 3:16").
 - Keyboard shortcut cheatsheet in the UI; "which song is live" indicator; undo for delete.

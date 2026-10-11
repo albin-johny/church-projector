@@ -31,6 +31,16 @@
     }
   };
 
+  // Phone/tablet layout shows one screen at a time: the library list or the content. On
+  // desktop the view classes have no effect.
+  function setMobileView(view) {
+    const root = $('#app-root');
+    root.classList.toggle('view-stage', view === 'stage');
+    root.classList.toggle('view-list', view !== 'stage');
+    if (view === 'stage') $('#stage').scrollTop = 0;
+  }
+  $('#btn-mobile-back').addEventListener('click', () => setMobileView('list'));
+
   function toast(msg) {
     const t = $('#toast');
     t.textContent = msg;
@@ -45,6 +55,7 @@
     $$('.tab-btn').forEach(b => b.classList.toggle('active', b.dataset.tab === tab));
     $('#songs-search-wrap').style.display = tab === 'songs' ? '' : 'none';
     $('#songs-footer').style.display = tab === 'songs' ? '' : 'none';
+    setMobileView(tab === 'custom' ? 'stage' : 'list');
     refreshList();
     renderStage();
   }
@@ -113,6 +124,7 @@
       state.songMode = 'view';
       renderList();
       renderStage();
+      setMobileView('stage');
     }));
     $$('.star-btn').forEach(el => el.addEventListener('click', async (e) => {
       e.stopPropagation();
@@ -198,7 +210,7 @@
     setTab('songs');
     renderStage();
   }
-  $('#btn-new-song').addEventListener('click', newSongDraft);
+  $('#btn-new-song').addEventListener('click', () => { newSongDraft(); setMobileView('stage'); });
 
   function renderStage() {
     const stage = $('#stage');
@@ -326,7 +338,7 @@
     $('#btn-save-song').addEventListener('click', saveSongFromEditor);
     $('#btn-cancel-edit').addEventListener('click', () => {
       if (d.id) { state.songMode = 'view'; }
-      else { state.selectedSongId = null; state.editingDraft = null; }
+      else { state.selectedSongId = null; state.editingDraft = null; setMobileView('list'); }
       renderStage();
     });
     if (d.id) $('#btn-delete-song').addEventListener('click', async () => {
@@ -337,6 +349,7 @@
       state.editingDraft = null;
       state.songMode = 'view';
       await refreshList(); renderStage();
+      setMobileView('list');
       toast('Song deleted');
     });
     renderSlidePreview();
@@ -515,6 +528,7 @@
       b.chapter = Number(el.dataset.ch);
       renderBibleRail();
       loadChapter();
+      setMobileView('stage');
     }));
     // Keep the selected book in view when the rail is re-drawn.
     const sel = list.querySelector('.bible-book.selected');
