@@ -1,91 +1,129 @@
-/* Song library storage.
-   Data lives in the browser's localStorage (per machine) under KEY.
-   To share a library across the team's machines/projector laptop:
-     1. Build the library on one machine.
-     2. Click "Export library" -> saves songs.json.
-     3. Upload that songs.json to /data/songs.json on your hosting (replacing the seed file).
-     4. On every other machine, open Songs tab -> "Load shared library" to pull that file in.
-   This keeps the app 100% static (no server/database required), while still
-   letting the whole team work from one canonical song list. See README.md
-   for the optional step-up to a PHP/Firebase backend for live shared editing.
+/* Song library storage — Supabase Postgres (table `songs`, see supabase/schema.sql).
+   Requires the signed-in church user (js/auth.js); RLS blocks everyone else.
+
+   Everything that talks to the server is async. Songs seen by search()/get()/save() are kept
+   in an in-memory cache so the UI can read an already-listed song synchronously with
+   getCached(). The cache is a convenience only — the database is the single source of truth.
+
+   App-side song shape (camelCase) <-> DB row (snake_case):
+     id, title, language, tags[], slides[], inSetlist <-> in_setlist,
+     sourceUrl <-> source_url, lyricist, copyright, updatedAt <-> updated_at
 */
 const SongStore = (() => {
-  const KEY = 'cp_songs_v1';
+  const TABLE = 'songs';
+  const PAGE = 50;
+  const cache = new Map();
 
-  function _read() {
-    try {
-      const raw = localStorage.getItem(KEY);
-      return raw ? JSON.parse(raw) : [];
-    } catch (e) {
-      console.error('SongStore read error', e);
-      return [];
-    }
-  }
-
-  function _write(list) {
-    localStorage.setItem(KEY, JSON.stringify(list));
-  }
+  function db() { return Auth.client; }
 
   function uid() {
     return 's_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 8);
   }
 
-  function getAll() {
-    return _read().sort((a, b) => a.title.localeCompare(b.title));
+  function fromRow(r) {
+    return {
+      id: r.id,
+      title: r.title,
+      language: r.language,
+      tags: r.tags || [],
+      slides: r.slides || [],
+      inSetlist: !!r.in_setlist,
+      sourceUrl: r.source_url || null,
+      lyricist: r.lyricist || null,
+      copyright: r.copyright || null,
+      updatedAt: r.updated_at ? Date.parse(r.updated_at) : Date.now()
+    };
   }
 
-  function get(id) {
-    return _read().find(s => s.id === id) || null;
+  function toRow(s) {
+    const row = {
+      id: s.id,
+      title: s.title,
+      language: s.language,
+      tags: s.tags || [],
+      slides: s.slides || [],
+      in_setlist: !!s.inSetlist
+    };
+    if (s.sourceUrl !== undefined) row.source_url = s.sourceUrl;
+    if (s.lyricist !== undefined) row.lyricist = s.lyricist;
+    if (s.copyright !== undefined) row.copyright = s.copyright;
+    return row;
   }
 
-  function save(song) {
-    const list = _read();
-    if (!song.id) song.id = uid();
-    song.updatedAt = Date.now();
-    const idx = list.findIndex(s => s.id === song.id);
-    if (idx >= 0) list[idx] = song; else list.push(song);
-    _write(list);
+  function check(res) {
+    if (res.error) throw new Error(res.error.message);
+    return res;
+  }
+
+  function remember(song) {
+    cache.set(song.id, song);
     return song;
   }
 
-  function remove(id) {
-    _write(_read().filter(s => s.id !== id));
+  // Server-side search + pagination. Matching is a case-insensitive substring over title,
+  // lyrics (both scripts) and tags, backed by a trigram index.
+  // Returns { songs, total } for the requested page.
+  async function search(query, { lang = 'all', setlistOnly = false, offset = 0, limit = PAGE } = {}) {
+    let q = db().from(TABLE).select('*', { count: 'exact' });
+    if (lang && lang !== 'all') q = q.eq('language', lang);
+    if (setlistOnly) q = q.eq('in_setlist', true);
+    const term = (query || '').trim();
+    if (term) q = q.ilike('search_text', '%' + term.replace(/[\\%_]/g, '\\$&') + '%');
+    const res = check(await q.order('title', { ascending: true }).range(offset, offset + limit - 1));
+    return { songs: res.data.map(fromRow).map(remember), total: res.count || 0 };
   }
 
-  // Flips a song's inclusion in the current setlist — the operator marks
-  // which songs are lined up for the next service, then unmarks them once
-  // that service is over and marks a new set for next time.
-  function toggleSetlist(id) {
-    const list = _read();
-    const song = list.find(s => s.id === id);
+  function getCached(id) {
+    return cache.get(id) || null;
+  }
+
+  async function get(id) {
+    if (cache.has(id)) return cache.get(id);
+    const res = check(await db().from(TABLE).select('*').eq('id', id).maybeSingle());
+    return res.data ? remember(fromRow(res.data)) : null;
+  }
+
+  async function save(song) {
+    if (!song.id) song.id = uid();
+    const existing = cache.get(song.id);
+    const merged = Object.assign({}, existing || {}, song);
+    const res = check(await db().from(TABLE).upsert(toRow(merged)).select().single());
+    return remember(fromRow(res.data));
+  }
+
+  async function remove(id) {
+    check(await db().from(TABLE).delete().eq('id', id));
+    cache.delete(id);
+  }
+
+  // Flips a song's bookmark ("setlist") flag; returns the new value.
+  async function toggleSetlist(id) {
+    const song = await get(id);
     if (!song) return false;
-    song.inSetlist = !song.inSetlist;
-    song.updatedAt = Date.now();
-    _write(list);
-    return song.inSetlist;
+    const next = !song.inSetlist;
+    check(await db().from(TABLE).update({ in_setlist: next }).eq('id', id));
+    song.inSetlist = next;
+    return next;
   }
 
-  // A slide is either a plain string, or a { text, en } pair for
-  // Malayalam/Hindi songs (native script + Manglish/English shown together
-  // while presenting).
-  function slideText(slide) {
-    if (typeof slide === 'string') return slide;
-    if (slide && typeof slide === 'object') return [slide.text, slide.en].filter(Boolean).join(' ');
-    return '';
+  async function count() {
+    const res = check(await db().from(TABLE).select('id', { count: 'exact', head: true }));
+    return res.count || 0;
   }
 
-  function search(query, langFilter) {
-    const q = (query || '').trim().toLowerCase();
-    return getAll().filter(s => {
-      if (langFilter && langFilter !== 'all' && s.language !== langFilter) return false;
-      if (!q) return true;
-      const hay = (s.title + ' ' + (s.tags || []).join(' ') + ' ' + s.slides.map(slideText).join(' ')).toLowerCase();
-      return hay.includes(q);
-    });
+  async function fetchAll() {
+    const out = [];
+    for (let offset = 0; ; offset += 1000) {
+      const res = check(await db().from(TABLE).select('*').order('title').range(offset, offset + 999));
+      out.push(...res.data.map(fromRow));
+      if (res.data.length < 1000) break;
+    }
+    return out;
   }
 
-  function exportJSON() {
-    const data = JSON.stringify({ songs: _read(), exportedAt: new Date().toISOString() }, null, 2);
+  async function exportJSON() {
+    const songs = await fetchAll();
+    const data = JSON.stringify({ songs, exportedAt: new Date().toISOString() }, null, 2);
     const blob = new Blob([data], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -93,66 +131,55 @@ const SongStore = (() => {
     a.download = 'songs.json';
     a.click();
     URL.revokeObjectURL(url);
+    return songs.length;
   }
 
-  function importJSON(text, { merge = true } = {}) {
+  // Upserts by id (existing songs with the same id are overwritten). Returns the number of
+  // songs written.
+  async function importJSON(text) {
     const parsed = JSON.parse(text);
-    const incoming = Array.isArray(parsed) ? parsed : (parsed.songs || []);
-    if (!merge) {
-      _write(incoming);
-      return incoming.length;
+    const incoming = (Array.isArray(parsed) ? parsed : (parsed.songs || []))
+      .filter((s) => s && s.title && Array.isArray(s.slides));
+    incoming.forEach((s) => { if (!s.id) s.id = uid(); });
+    for (let i = 0; i < incoming.length; i += 200) {
+      check(await db().from(TABLE).upsert(incoming.slice(i, i + 200).map(toRow)));
     }
-    const list = _read();
-    const byId = new Map(list.map(s => [s.id, s]));
-    const byTitle = new Map(list.map(s => [s.title.trim().toLowerCase(), s]));
-    let added = 0;
-    incoming.forEach(s => {
-      if (s.id && byId.has(s.id)) { Object.assign(byId.get(s.id), s); return; }
-      const key = (s.title || '').trim().toLowerCase();
-      if (key && byTitle.has(key)) { Object.assign(byTitle.get(key), s); return; }
-      if (!s.id) s.id = uid();
-      list.push(s);
-      added++;
-    });
-    _write(list);
-    return added;
+    cache.clear();
+    return incoming.length;
   }
 
-  // Runs on every app load (not just when the library is empty), so new
-  // bundled hymns added to data/songs.json show up automatically without
-  // the operator having to click Import. It only ever *adds* songs that
-  // aren't already present (matched by id, then by title) — it never
-  // overwrites a song already in localStorage, so local edits/additions
-  // are always safe.
+  // One-time move of a library saved by the old localStorage version of the app (key
+  // cp_songs_v1) into the database. The old data is left in place but marked as migrated.
+  async function migrateLocal() {
+    const DONE = 'cp_songs_v1_migrated';
+    if (localStorage.getItem(DONE)) return;
+    const raw = localStorage.getItem('cp_songs_v1');
+    if (raw) {
+      const songs = JSON.parse(raw);
+      if (Array.isArray(songs) && songs.length) await importJSON(JSON.stringify(songs));
+    }
+    localStorage.setItem(DONE, new Date().toISOString());
+  }
+
+  // First run only: if the database has no songs at all, load the bundled public-domain
+  // starter hymns from data/songs.json.
   async function seedIfEmpty() {
     try {
+      await migrateLocal();
+      if ((await count()) > 0) return;
       const res = await fetch('data/songs.json', { cache: 'no-store' });
       if (!res.ok) return;
-      const data = await res.json();
-      const songs = Array.isArray(data) ? data : (data.songs || []);
-      if (!songs.length) return;
-      const list = _read();
-      const existingIds = new Set(list.map(s => s.id));
-      const existingTitles = new Set(list.map(s => (s.title || '').trim().toLowerCase()));
-      let added = false;
-      songs.forEach(s => {
-        if (existingIds.has(s.id)) return;
-        if (existingTitles.has((s.title || '').trim().toLowerCase())) return;
-        list.push(s);
-        added = true;
-      });
-      if (added) _write(list);
+      await importJSON(await res.text());
     } catch (e) {
-      /* offline or no seed file — fine, keep whatever's local */
+      console.warn('SongStore seed skipped:', e);
     }
   }
 
-  async function loadSharedFromServer({ merge = true } = {}) {
+  async function loadSharedFromServer() {
     const res = await fetch('data/songs.json', { cache: 'no-store' });
     if (!res.ok) throw new Error('Could not fetch data/songs.json (' + res.status + ')');
-    const text = await res.text();
-    return importJSON(text, { merge });
+    return importJSON(await res.text());
   }
 
-  return { getAll, get, save, remove, toggleSetlist, search, exportJSON, importJSON, seedIfEmpty, loadSharedFromServer };
+  return { search, get, getCached, save, remove, toggleSetlist, count, exportJSON, importJSON, seedIfEmpty, loadSharedFromServer, PAGE };
 })();

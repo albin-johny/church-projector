@@ -1,30 +1,26 @@
-/* Client-side login gate for the control panel only (display.html stays
-   open — it's just projector output, not the admin interface).
-   IMPORTANT: this is a deterrent, not real security. It's a static site with
-   no server, so the credentials below are readable by anyone who views the
-   page source, and the gate can be bypassed by editing localStorage
-   directly. Don't rely on this to protect anything actually sensitive.
-*/
+/* Login gate for the control panel (display.html stays open — it's only projector output).
+   Backed by Supabase Auth (one shared church email/password user). Real security comes from
+   Row Level Security in supabase/schema.sql; this module just manages the session.
+   Needs js/config.js and the supabase-js CDN script loaded first. */
 const Auth = (() => {
-  const USERNAME = 'admin';
-  const PASSWORD = 'cogdarwin';
-  const KEY = 'cp_auth_ok';
+  const client = window.supabase.createClient(
+    window.SUPABASE_CONFIG.url,
+    window.SUPABASE_CONFIG.key
+  );
 
-  function isLoggedIn() {
-    return localStorage.getItem(KEY) === '1';
+  async function isLoggedIn() {
+    const { data } = await client.auth.getSession();
+    return !!data.session;
   }
 
-  function login(username, password) {
-    if (username === USERNAME && password === PASSWORD) {
-      localStorage.setItem(KEY, '1');
-      return true;
-    }
-    return false;
+  async function login(email, password) {
+    const { error } = await client.auth.signInWithPassword({ email, password });
+    return !error;
   }
 
-  function logout() {
-    localStorage.removeItem(KEY);
+  async function logout() {
+    await client.auth.signOut();
   }
 
-  return { isLoggedIn, login, logout };
+  return { isLoggedIn, login, logout, client };
 })();
