@@ -104,30 +104,95 @@
   applyTheme(ProjectorLink.getTheme());
   render(ProjectorLink.lastMessage());
 
-  // Online pairing: ?code=ABC123 in the URL, or press P to enter/change the code. The last
-  // code is remembered so reopening the window reconnects by itself.
+  // Online pairing: ?code=ABC123 in the URL, a remembered code, or the on-screen "Connect to
+  // control panel" form (also reachable via the corner "Code" button or the P key).
   const PAIR_KEY = 'cp_pair_code';
+  const SKIP_KEY = 'cp_pair_skip';
   const netStatus = document.getElementById('net-status');
-  function pair(code) {
-    if (!code) return;
-    localStorage.setItem(PAIR_KEY, code);
-    ProjectorLink.remote.joinDisplay(code).then((r) => {
-      if (!r.ok) netStatus.textContent = 'Code not recognised — press P';
-    });
+  const pairScreen = document.getElementById('pair-screen');
+  const pairInput = document.getElementById('pair-input');
+  const pairGo = document.getElementById('pair-go');
+  const pairError = document.getElementById('pair-error');
+  const pairOpen = document.getElementById('pair-open');
+  const pairOk = () => window.supabase && window.SUPABASE_CONFIG;
+
+  function showPairScreen(message) {
+    pairError.textContent = message || '';
+    pairScreen.classList.remove('hidden');
+    pairInput.focus();
+    pairInput.select();
   }
+  function hidePairScreen() { pairScreen.classList.add('hidden'); }
+
+  async function pair(code) {
+    code = String(code || '').trim().toUpperCase();
+    if (!code) return false;
+    const r = await ProjectorLink.remote.joinDisplay(code);
+    if (r.ok) {
+      localStorage.setItem(PAIR_KEY, code);
+      try { sessionStorage.removeItem(SKIP_KEY); } catch (e) {}
+      hidePairScreen();
+      return true;
+    }
+    return false;
+  }
+
   ProjectorLink.remote.onStatus((st) => {
     if (st === 'online') netStatus.textContent = '';
     else if (st === 'connecting') netStatus.textContent = 'Connecting…';
     else if (st === 'offline') netStatus.textContent = 'Offline — showing local link only';
     else netStatus.textContent = 'Connection problem';
   });
-  window.addEventListener('keydown', (e) => {
-    if (e.key.toLowerCase() !== 'p') return;
-    const c = prompt('Enter the display code from the control panel:');
-    if (c) pair(c.trim().toUpperCase());
+
+  document.getElementById('pair-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    if (!pairOk()) { pairError.textContent = 'Online mode is not available.'; return; }
+    pairGo.disabled = true;
+    pairError.textContent = '';
+    const ok = await pair(pairInput.value);
+    pairGo.disabled = false;
+    if (!ok) { pairError.textContent = 'Code not recognised — check it and try again.'; pairInput.focus(); pairInput.select(); }
   });
-  const urlCode = new URLSearchParams(location.search).get('code');
-  pair((urlCode || localStorage.getItem(PAIR_KEY) || '').toUpperCase());
+  pairInput.addEventListener('input', () => {
+    pairInput.value = pairInput.value.toUpperCase().replace(/[^A-Z0-9]/g, '');
+    pairError.textContent = '';
+  });
+  document.getElementById('pair-skip').addEventListener('click', () => {
+    try { sessionStorage.setItem(SKIP_KEY, '1'); } catch (e) {}
+    hidePairScreen();
+  });
+  pairOpen.addEventListener('click', () => showPairScreen(''));
+
+  // Show the "Code" button when the pointer moves or the screen is touched.
+  let pairBtnTimer = null;
+  function revealPairButton() {
+    if (!pairOk()) return;
+    pairOpen.classList.add('show');
+    clearTimeout(pairBtnTimer);
+    pairBtnTimer = setTimeout(() => pairOpen.classList.remove('show'), 3000);
+  }
+  window.addEventListener('mousemove', revealPairButton);
+  window.addEventListener('touchstart', revealPairButton, { passive: true });
+
+  window.addEventListener('keydown', (e) => {
+    if (e.target === pairInput || e.key.toLowerCase() !== 'p') return;
+    showPairScreen('');
+  });
+
+  (async () => {
+    if (!pairOk()) return;
+    const urlCode = (new URLSearchParams(location.search).get('code') || '').toUpperCase();
+    const saved = (localStorage.getItem(PAIR_KEY) || '').toUpperCase();
+    const code = urlCode || saved;
+    if (code) {
+      const ok = await pair(code);
+      if (!ok) showPairScreen('Code not recognised — enter the current code.');
+      return;
+    }
+    let skipped = false;
+    try { skipped = sessionStorage.getItem(SKIP_KEY) === '1'; } catch (e) {}
+    if (!skipped) showPairScreen('');
+  })();
 
   // Local convenience shortcuts (also controllable from the panel).
   window.addEventListener('keydown', (e) => {

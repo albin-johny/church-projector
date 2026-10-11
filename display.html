@@ -23,6 +23,19 @@
 
   <div id="net-status"></div>
 
+  <button id="pair-open" type="button" title="Enter or change the display code">Code</button>
+  <div id="pair-screen" class="hidden">
+    <form id="pair-form" autocomplete="off">
+      <div class="pair-title">Connect to control panel</div>
+      <div class="pair-sub">Enter the code shown on the control panel</div>
+      <input id="pair-input" type="text" inputmode="text" maxlength="6" autocapitalize="characters"
+             autocomplete="off" autocorrect="off" spellcheck="false" placeholder="ABC123" aria-label="Display code">
+      <button id="pair-go" type="submit">Connect</button>
+      <div id="pair-error"></div>
+      <button id="pair-skip" type="button">Use this window without a code</button>
+    </form>
+  </div>
+
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
   <script src="js/config.js"></script>
   <script src="js/link.js"></script>

@@ -993,6 +993,12 @@
       state.pairCode = res.code;
       $('#pair-code').textContent = res.code;
       $('#pair-row').style.display = '';
+      // After a refresh the panel has forgotten what is on the projector; show it again.
+      const live = await R.getLiveState();
+      if (live && state.liveIndex === -1) {
+        if (live.type === 'slide') renderMiniScreen(live);
+        else if (live.type === 'blank') $('#mini-screen').textContent = 'Display is blanked';
+      }
     } catch (e) {
       console.warn('Online mode unavailable, working locally:', e);
       $('#online-status').textContent = 'Online: ' + (e && e.message ? e.message : 'connection problem');

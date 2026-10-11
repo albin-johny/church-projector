@@ -141,3 +141,67 @@ body.show-cursor{ cursor:default; }
 #verse-footer .ver{ margin-top:0.2vh; font-size:calc(0.85vw * var(--font-scale)); line-height:1.1; color:rgba(var(--stage-text-rgb),0.5); letter-spacing:0.08em; text-transform:uppercase; }
 #verse-footer.lang-mal .ref{ font-family:'Noto Sans Malayalam', var(--font-ui); }
 #verse-footer.lang-hin .ref{ font-family:'Noto Sans Devanagari', var(--font-ui); }
+
+/* ---------- Pairing screen (enter the code from the control panel) ---------- */
+#pair-screen{
+  position:fixed; inset:0; z-index:50;
+  background:var(--stage-bg);
+  display:flex; align-items:center; justify-content:center;
+  cursor:default;
+  padding:20px;
+}
+#pair-form{
+  width:100%; max-width:420px;
+  text-align:center;
+  font-family:var(--font-ui);
+  color:var(--stage-text);
+}
+.pair-title{ font-family:var(--font-display); font-size:28px; margin-bottom:6px; }
+.pair-sub{ font-size:14px; color:var(--stage-dim); margin-bottom:22px; }
+#pair-input{
+  width:100%;
+  font:600 34px var(--font-ui);
+  letter-spacing:0.35em;
+  text-align:center;
+  text-transform:uppercase;
+  padding:14px 10px 14px 20px;
+  background:transparent;
+  color:var(--stage-text);
+  border:1.5px solid rgba(var(--stage-text-rgb),0.35);
+  border-radius:6px;
+  outline:none;
+}
+#pair-input:focus{ border-color:var(--stage-text); }
+#pair-go{
+  width:100%; margin-top:14px;
+  font:600 15px var(--font-ui);
+  letter-spacing:0.08em; text-transform:uppercase;
+  padding:14px;
+  border-radius:6px; border:none;
+  background:var(--stage-text); color:var(--stage-bg);
+  cursor:pointer;
+}
+#pair-go:disabled{ opacity:0.5; cursor:default; }
+#pair-error{ min-height:20px; margin-top:12px; font-size:14px; color:#d9534f; }
+#pair-skip{
+  margin-top:18px;
+  background:none; border:none;
+  font:500 13px var(--font-ui);
+  color:var(--stage-dim);
+  text-decoration:underline;
+  cursor:pointer;
+}
+/* Small button to re-open the pairing screen; fades in on mouse move / touch. */
+#pair-open{
+  position:fixed; top:10px; right:12px; z-index:40;
+  font:500 12px var(--font-ui);
+  letter-spacing:0.08em; text-transform:uppercase;
+  padding:6px 10px;
+  border-radius:4px;
+  border:1px solid rgba(var(--stage-text-rgb),0.3);
+  background:var(--stage-bg); color:var(--stage-dim);
+  opacity:0; pointer-events:none;
+  transition:opacity .25s ease;
+  cursor:pointer;
+}
+#pair-open.show{ opacity:1; pointer-events:auto; }

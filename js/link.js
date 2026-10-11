@@ -172,6 +172,16 @@ const ProjectorLink = (() => {
       } catch (e) {}
     });
 
+    // Last message saved for this session (what the projector is showing), or null.
+    async function getLiveState() {
+      if (!sessionId) return null;
+      try {
+        const { data } = await getClient().from('live_state')
+          .select('message').eq('session_id', sessionId).maybeSingle();
+        return data ? data.message : null;
+      } catch (e) { return null; }
+    }
+
     async function joinDisplay(code) {
       role = 'display';
       setStatus('connecting');
@@ -193,7 +203,7 @@ const ProjectorLink = (() => {
     }
 
     return {
-      startControl, joinDisplay, publish, release,
+      startControl, joinDisplay, publish, release, getLiveState,
       onStatus: (cb) => { statusCbs.push(cb); cb(status); },
       onTakeover: (cb) => takeoverCbs.push(cb),
       onDisplayCount: (cb) => { displayCountCbs.push(cb); cb(displayCount); },

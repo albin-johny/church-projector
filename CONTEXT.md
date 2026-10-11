@@ -82,8 +82,12 @@ church-projector/
 
 - **Session & pairing:** one `sessions` row for the church. After login the control panel
   shows its 6-character pairing code and a "Copy link" button. Displays pair via
-  `display.html?code=XXXXXX`, or press **P** in the display window; the code is remembered in
-  `localStorage['cp_pair_code']`. `join_session(code)` (security definer) resolves a code to a
+  `display.html?code=XXXXXX`, or — for a display opened without a code (e.g. from a phone's home
+  screen) — by typing the code into the on-screen **"Connect to control panel"** form that
+  `display.html` shows when it has no saved code (also reachable via the corner **Code** button,
+  which appears on mouse move/touch, or the P key). "Use this window without a code" skips it
+  for the session (local same-browser link only). The code is remembered in
+  `localStorage['cp_pair_code']`; a saved code that no longer matches reopens the form. `join_session(code)` (security definer) resolves a code to a
   session id for the anon role.
 - **Transport:** Realtime *broadcast* channel `session:<uuid>`. `ProjectorLink.send()` delivers
   locally and, when online, broadcasts too; the last slide/blank/clear is upserted into
@@ -94,6 +98,10 @@ church-projector/
   asks "Take over?" only if the seat is genuinely active; the old panel then shows an
   "another device took over" overlay with a "take control back" button. Logout and page close
   release the seat.
+- **Reconnect/refresh:** the display is independent of the control panel and keeps its last
+  slide. After the control panel reloads it reads `live_state` (`remote.getLiveState()`) and shows
+  the current slide in the mini preview (or "Display is blanked"); Next/Prev still start fresh
+  from the selected song/chapter.
 - **Presence:** every display tracks itself on the channel; the control panel shows
   "N displays connected" (falls back to the popup check when offline). Control panels don't
   count themselves.
