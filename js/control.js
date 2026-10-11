@@ -6,6 +6,9 @@
     tab: 'songs',
     songQuery: '',
     setlistOnly: false,
+    songList: [],            // currently loaded page(s) of songs
+    songTotal: 0,
+    listError: null,
     selectedSongId: null,
     songMode: 'view',        // 'view' or 'edit' — songs open read-only, Edit button switches to the form
     editingDraft: null,      // { id, title, language, tags, slidesText }
@@ -16,21 +19,15 @@
     fontScale: 1,
     custom: { text: '', slides: [] },
     bible: {
-      langKey: 'en',
-      translations: [],
-      translationId: '',
+      versionA: 'eng_kjv',   // first (left) version — also supplies the book list
+      versionB: '',          // optional second version shown beside it
       books: [],
       bookId: '',
       chapter: 1,
-      chapterVerses: [],
-      verseFrom: null,
-      verseTo: null,
-      perSlide: null,
-      loading: false,
-      error: '',
-      slides: [],
-      secondLangEnabled: false,
-      secondLangKey: 'ml'
+      rows: [],              // [{ number, a, b }] one per verse number in the chapter
+      slides: [],            // one single-verse slide per row (for next/prev)
+      selection: [],         // selected row indices (what is on screen)
+      anchor: null           // row index shift-click ranges extend from
     }
   };
 
@@ -48,25 +45,58 @@
     $$('.tab-btn').forEach(b => b.classList.toggle('active', b.dataset.tab === tab));
     $('#songs-search-wrap').style.display = tab === 'songs' ? '' : 'none';
     $('#songs-footer').style.display = tab === 'songs' ? '' : 'none';
-    renderList();
+    refreshList();
     renderStage();
   }
   $$('.tab-btn').forEach(b => b.addEventListener('click', () => setTab(b.dataset.tab)));
 
   /* ---------------- Song list (left rail) ---------------- */
+  // Songs come from the database a page at a time. state.songList holds what's currently
+  // loaded for the active search/filter; renderList() draws it, refreshList() re-queries.
+  let listRequest = 0;
+  async function refreshList({ append = false } = {}) {
+    if (state.tab !== 'songs') { renderList(); return; }
+    const req = ++listRequest;
+    try {
+      const res = await SongStore.search(state.songQuery, {
+        setlistOnly: state.setlistOnly,
+        offset: append ? state.songList.length : 0
+      });
+      if (req !== listRequest) return;   // a newer search superseded this one
+      state.songList = append ? state.songList.concat(res.songs) : res.songs;
+      state.songTotal = res.total;
+      state.listError = null;
+    } catch (e) {
+      if (req !== listRequest) return;
+      state.listError = e.message;
+    }
+    renderList();
+  }
+
   function renderList() {
     const list = $('#song-list');
+    list.classList.toggle('bible-mode', state.tab === 'bible');
+    if (state.tab === 'bible') { renderBibleRail(); return; }
     if (state.tab !== 'songs') {
       list.innerHTML = '';
       return;
     }
-    let songs = SongStore.search(state.songQuery);
-    if (state.setlistOnly) songs = songs.filter(s => s.inSetlist);
-    $('#library-count').textContent = songs.length + (songs.length === 1 ? ' song' : ' songs') + (state.setlistOnly ? ' bookmarked' : ' in your library');
+    if (state.listError) {
+      $('#library-count').textContent = 'Could not load songs';
+      list.innerHTML = `<div class="empty-note">Could not load the library:<br>${escapeHtml(state.listError)}</div>`;
+      return;
+    }
+    const songs = state.songList;
+    const total = state.songTotal;
+    const filtered = !!state.songQuery.trim();
+    $('#library-count').textContent = total + (total === 1 ? ' song' : ' songs') +
+      (state.setlistOnly ? ' bookmarked' : filtered ? ' found' : ' in your library');
     if (!songs.length) {
-      list.innerHTML = state.setlistOnly
-        ? `<div class="empty-note">No songs bookmarked yet.<br>Click the star on a song to add it.</div>`
-        : `<div class="empty-note">No songs yet.<br>Click "New song" to add your first one.</div>`;
+      list.innerHTML = filtered
+        ? `<div class="empty-note">No songs match “${escapeHtml(state.songQuery.trim())}”.</div>`
+        : state.setlistOnly
+          ? `<div class="empty-note">No songs bookmarked yet.<br>Click the star on a song to add it.</div>`
+          : `<div class="empty-note">No songs yet.<br>Click "New song" to add your first one.</div>`;
       return;
     }
     list.innerHTML = songs.map(s => `
@@ -76,25 +106,35 @@
           <div class="t2">${langLabel(s.language)} · ${s.slides.length} slide${s.slides.length === 1 ? '' : 's'}</div>
         </div>
         <button class="star-btn ${s.inSetlist ? 'active' : ''}" data-star-id="${s.id}" title="${s.inSetlist ? 'Remove from bookmarks' : 'Add to bookmarks'}">${s.inSetlist ? '★' : '☆'}</button>
-      </div>`).join('');
+      </div>`).join('') +
+      (songs.length < total ? `<button class="btn btn-small" id="btn-load-more" style="margin:10px auto;display:block;">Load more (${songs.length} of ${total})</button>` : '');
     $$('.list-item').forEach(el => el.addEventListener('click', () => {
       state.selectedSongId = el.dataset.id;
       state.songMode = 'view';
       renderList();
       renderStage();
     }));
-    $$('.star-btn').forEach(el => el.addEventListener('click', (e) => {
+    $$('.star-btn').forEach(el => el.addEventListener('click', async (e) => {
       e.stopPropagation();
-      SongStore.toggleSetlist(el.dataset.starId);
-      renderList();
+      try {
+        await SongStore.toggleSetlist(el.dataset.starId);
+      } catch (err) { toast('Could not update bookmark: ' + err.message); return; }
+      if (state.setlistOnly) await refreshList(); else renderList();
       if (state.selectedSongId === el.dataset.starId && state.songMode === 'view') renderStage();
     }));
+    const more = $('#btn-load-more');
+    if (more) more.addEventListener('click', () => refreshList({ append: true }));
   }
-  $('#song-search').addEventListener('input', (e) => { state.songQuery = e.target.value; renderList(); });
+  let searchTimer = null;
+  $('#song-search').addEventListener('input', (e) => {
+    state.songQuery = e.target.value;
+    clearTimeout(searchTimer);
+    searchTimer = setTimeout(refreshList, 250);
+  });
   $('#btn-bookmarks-filter').addEventListener('click', () => {
     state.setlistOnly = !state.setlistOnly;
     $('#btn-bookmarks-filter').classList.toggle('active', state.setlistOnly);
-    renderList();
+    refreshList();
   });
 
   function langLabel(code) {
@@ -132,7 +172,7 @@
 
   /* ---------------- Song editor (center stage) ---------------- */
   function loadSongIntoEditor(id) {
-    const song = SongStore.get(id);
+    const song = SongStore.getCached(id);
     if (!song) { state.editingDraft = null; return; }
     const base = { id: song.id, title: song.title, language: song.language, tags: (song.tags || []).join(', ') };
     if (isDualTextSong(song)) {
@@ -168,7 +208,12 @@
     if (state.songMode === 'edit' && state.editingDraft) { renderSongEditor(); return; }
 
     if (state.selectedSongId) {
-      renderSongView(SongStore.get(state.selectedSongId));
+      const cached = SongStore.getCached(state.selectedSongId);
+      if (cached) { renderSongView(cached); return; }
+      stage.innerHTML = `<div class="empty-note" style="padding-top:80px;">Loading song…</div>`;
+      const wanted = state.selectedSongId;
+      SongStore.get(wanted).then(() => { if (state.selectedSongId === wanted) renderStage(); })
+        .catch((e) => toast('Could not load song: ' + e.message));
       return;
     }
 
@@ -195,9 +240,10 @@
       loadSongIntoEditor(song.id);
       renderStage();
     });
-    $('#btn-toggle-setlist').addEventListener('click', () => {
-      SongStore.toggleSetlist(song.id);
-      renderList();
+    $('#btn-toggle-setlist').addEventListener('click', async () => {
+      try { await SongStore.toggleSetlist(song.id); }
+      catch (err) { toast('Could not update bookmark: ' + err.message); return; }
+      await refreshList();
       renderStage();
     });
     const box = $('#slide-preview');
@@ -283,13 +329,14 @@
       else { state.selectedSongId = null; state.editingDraft = null; }
       renderStage();
     });
-    if (d.id) $('#btn-delete-song').addEventListener('click', () => {
+    if (d.id) $('#btn-delete-song').addEventListener('click', async () => {
       if (!confirm('Delete "' + d.title + '"? This can\'t be undone.')) return;
-      SongStore.remove(d.id);
+      try { await SongStore.remove(d.id); }
+      catch (err) { toast('Could not delete: ' + err.message); return; }
       state.selectedSongId = null;
       state.editingDraft = null;
       state.songMode = 'view';
-      renderList(); renderStage();
+      await refreshList(); renderStage();
       toast('Song deleted');
     });
     renderSlidePreview();
@@ -351,7 +398,7 @@
     }));
   }
 
-  function saveSongFromEditor() {
+  async function saveSongFromEditor() {
     const d = state.editingDraft;
     if (!d.title.trim()) { toast('Give the song a title first'); return; }
     let slides;
@@ -362,32 +409,38 @@
       slides = parseSlides(d.slidesText);
       if (!slides.length) { toast('Add at least one slide of lyrics'); return; }
     }
-    const saved = SongStore.save({
-      id: d.id,
-      title: d.title.trim(),
-      language: d.language,
-      tags: d.tags.split(',').map(t => t.trim()).filter(Boolean),
-      slides
-    });
+    let saved;
+    try {
+      saved = await SongStore.save({
+        id: d.id,
+        title: d.title.trim(),
+        language: d.language,
+        tags: d.tags.split(',').map(t => t.trim()).filter(Boolean),
+        slides
+      });
+    } catch (err) { toast('Could not save: ' + err.message); return; }
     state.selectedSongId = saved.id;
     state.editingDraft.id = saved.id;
     state.songMode = 'view';
-    renderList();
+    await refreshList();
     renderStage();
     toast('Saved "' + saved.title + '"');
   }
 
   /* ---------------- Import / export ---------------- */
-  $('#btn-export').addEventListener('click', () => { SongStore.exportJSON(); toast('Downloaded songs.json'); });
+  $('#btn-export').addEventListener('click', async () => {
+    try { const n = await SongStore.exportJSON(); toast(`Downloaded songs.json (${n} songs)`); }
+    catch (err) { toast('Could not export: ' + err.message); }
+  });
   $('#btn-import').addEventListener('click', () => $('#file-import').click());
   $('#file-import').addEventListener('change', async (e) => {
     const file = e.target.files[0];
     if (!file) return;
     const text = await file.text();
     try {
-      const added = SongStore.importJSON(text, { merge: true });
-      renderList();
-      toast(`Imported — ${added} new song(s) added`);
+      const n = await SongStore.importJSON(text);
+      await refreshList();
+      toast(`Imported ${n} song(s)`);
     } catch (err) {
       toast('Could not read that file: ' + err.message);
     }
@@ -431,193 +484,264 @@
   }
 
   /* ---------------- Bible stage ---------------- */
+  // Left rail: books (left column) and chapters of the selected book (right column).
+  function renderBibleRail() {
+    const b = state.bible;
+    const list = $('#song-list');
+    const v = BibleAPI.getVersionList().find(x => x.id === b.versionA);
+    $('#library-count').textContent = v ? `Bible · ${v.label}` : 'Bible';
+    if (!b.books.length) {
+      list.innerHTML = `<div class="empty-note">Loading books…</div>`;
+      return;
+    }
+    const book = b.books.find(x => x.id === b.bookId);
+    const chapters = book ? book.chapters : 0;
+    list.innerHTML = `
+      <div class="bible-rail">
+        <div class="bible-books">
+          ${b.books.map(bk => `<button class="bible-book ${bk.id === b.bookId ? 'selected' : ''}" data-book="${bk.id}">${escapeHtml(bk.name || bk.commonName)}</button>`).join('')}
+        </div>
+        <div class="bible-chapters">
+          ${Array.from({ length: chapters }, (_, i) => `<button class="bible-chapter ${i + 1 === b.chapter ? 'selected' : ''}" data-ch="${i + 1}">${i + 1}</button>`).join('')}
+        </div>
+      </div>`;
+    $$('.bible-book').forEach(el => el.addEventListener('click', () => {
+      b.bookId = el.dataset.book;
+      b.chapter = 1;
+      renderBibleRail();
+      loadChapter();
+    }));
+    $$('.bible-chapter').forEach(el => el.addEventListener('click', () => {
+      b.chapter = Number(el.dataset.ch);
+      renderBibleRail();
+      loadChapter();
+    }));
+    // Keep the selected book in view when the rail is re-drawn.
+    const sel = list.querySelector('.bible-book.selected');
+    if (sel) sel.scrollIntoView({ block: 'nearest' });
+  }
+
+  // The chosen versions are remembered per browser (a convenience, never required).
+  const BIBLE_PREF_KEY = 'cp_bible_versions';
+  function loadBiblePrefs() {
+    const b = state.bible;
+    try {
+      const p = JSON.parse(localStorage.getItem(BIBLE_PREF_KEY) || 'null');
+      const ids = BibleAPI.getVersionList().map(v => v.id);
+      if (p && ids.includes(p.a)) b.versionA = p.a;
+      if (p && p.b && ids.includes(p.b) && p.b !== b.versionA) b.versionB = p.b;
+    } catch (e) { /* ignore */ }
+  }
+  function saveBiblePrefs() {
+    const b = state.bible;
+    try { localStorage.setItem(BIBLE_PREF_KEY, JSON.stringify({ a: b.versionA, b: b.versionB })); } catch (e) { /* ignore */ }
+  }
+  let biblePrefsLoaded = false;
+
+  function versionOptions(selectedId, allowNone) {
+    const groups = {};
+    BibleAPI.getVersionList().forEach(v => { (groups[v.langLabel] = groups[v.langLabel] || []).push(v); });
+    return (allowNone ? `<option value="">— none —</option>` : '') +
+      Object.entries(groups).map(([lang, vs]) =>
+        `<optgroup label="${escapeHtml(lang)}">${vs.map(v => `<option value="${v.id}" ${v.id === selectedId ? 'selected' : ''}>${escapeHtml(v.label)}</option>`).join('')}</optgroup>`
+      ).join('');
+  }
+
   async function renderBibleStage() {
     const stage = $('#stage');
     const b = state.bible;
+    if (!biblePrefsLoaded) { loadBiblePrefs(); biblePrefsLoaded = true; }
     stage.innerHTML = `
       <h1>Bible</h1>
-      <div class="meta">Powered by the Free Use Bible API — no copyright restrictions</div>
+      <div class="meta" id="bible-ref-title">Choose a book and chapter on the left</div>
       <div class="bible-picker">
-        <div class="language-pills" id="bible-lang-pills">
-          ${Object.entries(BibleAPI.LANGS).map(([key, v]) => `<span class="pill ${b.langKey === key ? 'active' : ''}" data-lang="${key}">${v.label}</span>`).join('')}
-        </div>
         <div class="row">
-          <div class="field"><label>Translation</label><select id="f-translation"><option>Loading…</option></select></div>
+          <div class="field"><label>Version 1</label><select id="f-version-a">${versionOptions(b.versionA, false)}</select></div>
+          <div class="field"><label>Version 2 (optional)</label><select id="f-version-b">${versionOptions(b.versionB, true)}</select></div>
         </div>
-        <div class="row">
-          <div class="field"><label>Book</label><select id="f-book"><option>Loading…</option></select></div>
-          <div class="field"><label>Chapter</label><input type="number" id="f-chapter" min="1" value="${b.chapter}" style="width:100%"></div>
-        </div>
-        <div class="row">
-          <div class="field"><label>Verse from</label><input type="number" id="f-vfrom" min="1" placeholder="1" value="${b.verseFrom != null ? b.verseFrom : ''}"></div>
-          <div class="field"><label>Verse to</label><input type="number" id="f-vto" min="1" placeholder="last verse" value="${b.verseTo != null ? b.verseTo : ''}"></div>
-          <div class="field"><label>Verses per slide</label><input type="number" id="f-persLide" min="1" max="5" placeholder="1" value="${b.perSlide != null ? b.perSlide : ''}"></div>
-        </div>
-        <div class="hint">Leave verse from/to/per-slide blank to load the whole chapter.</div>
-        <div class="row">
-          <div class="field" style="flex:0 0 auto;">
-            <label style="display:flex; align-items:center; gap:8px; cursor:pointer;">
-              <input type="checkbox" id="f-second-lang-toggle" ${b.secondLangEnabled ? 'checked' : ''}>
-              Show second language at the same time
-            </label>
-          </div>
-          <div class="field" id="second-lang-field" style="${b.secondLangEnabled ? '' : 'display:none;'}">
-            <label>Second language</label>
-            <select id="f-second-lang">
-              ${Object.entries(BibleAPI.LANGS).filter(([key]) => key !== b.langKey).map(([key, v]) => `<option value="${key}" ${b.secondLangKey === key ? 'selected' : ''}>${v.label}</option>`).join('')}
-            </select>
-          </div>
-        </div>
-        <button class="btn btn-gold" id="btn-load-chapter">Load</button>
-        <div id="bible-status" class="hint"></div>
+        <div class="hint">Click a verse to show it. Shift+click to show a range, Ctrl/⌘+click to add or remove single verses.</div>
         <div id="bible-slides" class="verse-slides"></div>
       </div>
     `;
-    $$('#bible-lang-pills .pill').forEach(p => p.addEventListener('click', async () => {
-      b.langKey = p.dataset.lang;
-      b.translationId = '';
-      b.books = []; b.bookId = '';
-      b.verseFrom = null; b.verseTo = null; b.perSlide = null;
-      if (b.secondLangKey === b.langKey) {
-        b.secondLangKey = Object.keys(BibleAPI.LANGS).find(k => k !== b.langKey);
-      }
-      await renderBibleStage();
-      loadTranslationsForLang();
-    }));
-    $('#f-chapter').addEventListener('input', () => { b.chapter = Number($('#f-chapter').value) || 1; resetVerseRangeFields(); });
-    $('#f-vfrom').addEventListener('input', () => {
-      const v = $('#f-vfrom').value.trim();
-      b.verseFrom = v === '' ? null : Number(v);
-    });
-    $('#f-vto').addEventListener('input', () => {
-      const v = $('#f-vto').value.trim();
-      b.verseTo = v === '' ? null : Number(v);
-    });
-    $('#f-persLide').addEventListener('input', () => {
-      const v = $('#f-persLide').value.trim();
-      b.perSlide = v === '' ? null : Number(v);
-    });
-    $('#f-second-lang-toggle').addEventListener('change', () => {
-      b.secondLangEnabled = $('#f-second-lang-toggle').checked;
-      $('#second-lang-field').style.display = b.secondLangEnabled ? '' : 'none';
-    });
-    $('#f-second-lang').addEventListener('change', () => { b.secondLangKey = $('#f-second-lang').value; });
-    $('#btn-load-chapter').addEventListener('click', loadChapter);
-
-    await loadTranslationsForLang();
-  }
-
-  // Verse from/to/per-slide are meant to reset to blank whenever the book or
-  // chapter changes, so the operator gets the whole chapter by default and
-  // only narrows it down when they actually want a specific verse range.
-  function resetVerseRangeFields() {
-    const b = state.bible;
-    b.verseFrom = null;
-    b.verseTo = null;
-    b.perSlide = null;
-    const vf = $('#f-vfrom'), vt = $('#f-vto'), ps = $('#f-persLide');
-    if (vf) vf.value = '';
-    if (vt) vt.value = '';
-    if (ps) ps.value = '';
-  }
-
-  async function loadTranslationsForLang() {
-    const b = state.bible;
-    const statusEl = $('#bible-status');
-    try {
-      const list = await BibleAPI.getTranslationsForLang(b.langKey);
-      b.translations = list;
-      if (!list.length) {
-        $('#f-translation').innerHTML = `<option>No translations found</option>`;
-        return;
-      }
-      if (!b.translationId || !list.some(t => t.id === b.translationId)) b.translationId = list[0].id;
-      $('#f-translation').innerHTML = list.map(t => `<option value="${t.id}" ${t.id === b.translationId ? 'selected' : ''}>${escapeHtml(t.englishName)} (${t.shortName})</option>`).join('');
-      $('#f-translation').addEventListener('change', () => { b.translationId = $('#f-translation').value; loadBooks(); });
+    $('#f-version-a').addEventListener('change', async () => {
+      b.versionA = $('#f-version-a').value;
+      if (b.versionB === b.versionA) { b.versionB = ''; $('#f-version-b').value = ''; }
+      saveBiblePrefs();
+      b.books = [];
       await loadBooks();
-    } catch (err) {
-      statusEl.textContent = 'Could not reach the Bible API — check your internet connection.';
-    }
+    });
+    $('#f-version-b').addEventListener('change', () => {
+      b.versionB = $('#f-version-b').value;
+      if (b.versionB === b.versionA) { b.versionB = ''; $('#f-version-b').value = ''; }
+      saveBiblePrefs();
+      loadChapter();
+    });
+    renderBibleRail();
+    drawVerseList();
+    await loadBooks();
   }
 
   async function loadBooks() {
     const b = state.bible;
-    const statusEl = $('#bible-status');
-    statusEl.textContent = 'Loading books…';
     try {
-      const books = await BibleAPI.getBooks(b.translationId);
+      const books = await BibleAPI.getBooks(b.versionA);
       b.books = books;
-      if (!b.bookId || !books.some(x => x.id === b.bookId)) b.bookId = books.length ? books[0].id : '';
-      $('#f-book').innerHTML = books.map(bk => `<option value="${bk.id}" ${bk.id === b.bookId ? 'selected' : ''}>${escapeHtml(bk.name || bk.commonName)}</option>`).join('');
-      $('#f-book').addEventListener('change', () => { b.bookId = $('#f-book').value; resetVerseRangeFields(); });
-      statusEl.textContent = '';
+      if (!b.bookId || !books.some(x => x.id === b.bookId)) { b.bookId = books.length ? books[0].id : ''; b.chapter = 1; }
+      const cur = books.find(x => x.id === b.bookId);
+      if (cur && b.chapter > cur.chapters) b.chapter = 1;
+      renderBibleRail();
+      if (b.bookId) await loadChapter();
     } catch (err) {
-      statusEl.textContent = 'Could not load the book list for this translation.';
+      toast('Could not load the Bible data — check your internet connection.');
     }
+  }
+
+  // "1-3,5" style label for a sorted list of verse numbers.
+  function compactRef(nums) {
+    const parts = [];
+    for (let i = 0; i < nums.length; i++) {
+      let j = i;
+      while (j + 1 < nums.length && nums[j + 1] === nums[j] + 1) j++;
+      parts.push(j > i ? `${nums[i]}-${nums[j]}` : `${nums[i]}`);
+      i = j;
+    }
+    return parts.join(',');
+  }
+
+  // Builds one projector slide from one or more verse rows (primary text + optional
+  // second-version text). The footer is what the display shows bottom-centre.
+  function makeBibleSlide(rows) {
+    const b = state.bible;
+    const vs = BibleAPI.getVersionList();
+    const vA = vs.find(x => x.id === b.versionA) || {};
+    const vB = vs.find(x => x.id === b.versionB) || {};
+    const aText = rows.map(r => r.a).filter(Boolean).join(' ');
+    const bText = rows.map(r => r.b).filter(Boolean).join(' ');
+    const nums = rows.map(r => r.number);
+    const ref = compactRef(nums);
+    const book = b.books.find(x => x.id === b.bookId);
+    const bookName = (book && (book.name || book.commonName)) || b.bookId;
+    const slide = { nums, ref, key: b.bookId + ':' + b.chapter, title: `${bookName} ${b.chapter}` };
+    let labels;
+    if (aText) {
+      Object.assign(slide, { text: aText, lang: vA.langKey });
+      if (bText) Object.assign(slide, { text2: bText, lang2: vB.langKey });
+      labels = [vA.label, bText ? vB.label : null];
+    } else {
+      Object.assign(slide, { text: bText, lang: vB.langKey });
+      labels = [vB.label];
+    }
+    slide.footer = `${bookName} ${b.chapter}:${ref}`;          // reference, prominent
+    slide.footer2 = labels.filter(Boolean).join(' · ');        // version(s), small, beneath
+    return slide;
+  }
+
+  // Draws the full chapter in the centre pane: verse number + text per row, with a second
+  // column when a second version is chosen. Rows are aligned by verse number.
+  function drawVerseList() {
+    const b = state.bible;
+    const box = $('#bible-slides');
+    if (!box) return;
+    const vs = BibleAPI.getVersionList();
+    const two = !!b.versionB;
+    const labelA = (vs.find(x => x.id === b.versionA) || {}).label || '';
+    const labelB = (vs.find(x => x.id === b.versionB) || {}).label || '';
+    const head = two ? `<div class="verse-head two"><span></span><span>${escapeHtml(labelA)}</span><span>${escapeHtml(labelB)}</span></div>` : '';
+    box.innerHTML = head + b.rows.map((r, i) => `
+      <div class="verse-slide verse-row ${two ? 'two' : ''}" data-i="${i}" data-num="${r.number}">
+        <span class="vnum">${r.number}</span>
+        <div class="vtext">${escapeHtml(r.a)}</div>
+        ${two ? `<div class="vtext vtext-b">${escapeHtml(r.b)}</div>` : ''}
+      </div>`).join('');
+    $$('#bible-slides .verse-row').forEach(el => el.addEventListener('click', (e) => {
+      onVerseClick(Number(el.dataset.i), e);
+    }));
+    highlightLiveSlide();
+  }
+
+  // Click = just that verse. Shift+click = range from the last clicked verse. Ctrl/⌘+click =
+  // add/remove a single verse. Whatever is selected goes on screen together as one slide.
+  function onVerseClick(i, e) {
+    const b = state.bible;
+    let sel;
+    if (e.shiftKey && b.anchor != null) {
+      const lo = Math.min(b.anchor, i), hi = Math.max(b.anchor, i);
+      sel = [];
+      for (let k = lo; k <= hi; k++) sel.push(k);
+    } else if (e.metaKey || e.ctrlKey) {
+      const set = new Set(b.selection);
+      if (set.has(i)) set.delete(i); else set.add(i);
+      sel = Array.from(set).sort((x, y) => x - y);
+      b.anchor = i;
+      if (!sel.length) sel = [i];
+    } else {
+      sel = [i];
+      b.anchor = i;
+    }
+    b.selection = sel;
+    showBibleSelection();
+  }
+
+  function showBibleSelection() {
+    const b = state.bible;
+    if (!b.selection.length) return;
+    const last = b.selection[b.selection.length - 1];
+    state.liveSlides = b.slides;
+    state.liveIndex = last;       // Next/Prev continue one verse at a time from here
+    state.liveOverride = b.selection.length > 1
+      ? { forSlides: b.slides, forIndex: last, slide: makeBibleSlide(b.selection.map(k => b.rows[k])) }
+      : null;
+    pushLive();
   }
 
   async function loadChapter() {
     const b = state.bible;
-    const statusEl = $('#bible-status');
-    const slidesBox = $('#bible-slides');
-    statusEl.textContent = 'Loading chapter…';
-    slidesBox.innerHTML = '';
+    const requestKey = `${b.versionA}|${b.versionB}|${b.bookId}|${b.chapter}`;
     try {
-      const data = await BibleAPI.getChapter(b.translationId, b.bookId, b.chapter);
-      const verses = BibleAPI.extractVerses(data);
-      b.chapterVerses = verses;
-      if (!verses.length) { statusEl.textContent = 'No verses found for that chapter.'; return; }
-      statusEl.textContent = `${verses.length} verses loaded.`;
-
-      // Blank verse-range fields mean "whole chapter" — computed here without
-      // writing back into b.verseFrom/verseTo/perSlide, so the fields stay
-      // blank for the operator until they actually type a range.
-      const rangeFrom = b.verseFrom || 1;
-      const rangeTo = b.verseTo || verses[verses.length - 1].number;
-      const rangePerSlide = b.perSlide || 1;
-
-      const bookName = (b.books.find(x => x.id === b.bookId) || {}).name || b.bookId;
-      let slides = BibleAPI.buildSlides(verses, rangeFrom, rangeTo, rangePerSlide)
-        .map(s => ({ ...s, title: `${bookName} ${b.chapter}`, lang: b.langKey }));
-
-      if (b.secondLangEnabled && b.secondLangKey && b.secondLangKey !== b.langKey) {
+      const dataA = await BibleAPI.getChapter(b.versionA, b.bookId, b.chapter);
+      const versesA = BibleAPI.extractVerses(dataA);
+      let versesB = [];
+      let bNote = '';
+      if (b.versionB) {
         try {
-          const list2 = await BibleAPI.getTranslationsForLang(b.secondLangKey);
-          if (list2.length) {
-            const data2 = await BibleAPI.getChapter(list2[0].id, b.bookId, b.chapter);
-            const verses2 = BibleAPI.extractVerses(data2);
-            if (verses2.length) {
-              const rangeTo2 = b.verseTo || verses2[verses2.length - 1].number;
-              const slides2 = BibleAPI.buildSlides(verses2, rangeFrom, rangeTo2, rangePerSlide);
-              slides = slides.map((s, i) => slides2[i] ? { ...s, text2: slides2[i].text, lang2: b.secondLangKey } : s);
-            }
-          }
+          versesB = BibleAPI.extractVerses(await BibleAPI.getChapter(b.versionB, b.bookId, b.chapter));
         } catch (err) {
-          statusEl.textContent += ' (Could not load the second language for this book/chapter.)';
+          bNote = 'Version 2 has no text for this chapter.';
         }
       }
-      b.slides = slides;
-
-      slidesBox.innerHTML = slides.map((s, i) => `
-        <div class="verse-slide" data-i="${i}">
-          <span class="slide-label">v${s.ref} — click to show</span>${escapeHtml(s.text)}
-          ${s.text2 ? `<div class="verse-slide-secondary">${escapeHtml(s.text2)}</div>` : ''}
-        </div>`).join('');
-      $$('#bible-slides .verse-slide').forEach(el => el.addEventListener('click', () => {
-        state.liveSlides = slides;
-        state.liveIndex = Number(el.dataset.i);
-        pushLive();
-      }));
+      if (requestKey !== `${b.versionA}|${b.versionB}|${b.bookId}|${b.chapter}`) return; // superseded
+      const mapA = new Map(versesA.map(v => [v.number, v.text]));
+      const mapB = new Map(versesB.map(v => [v.number, v.text]));
+      const nums = Array.from(new Set([...mapA.keys(), ...mapB.keys()])).sort((x, y) => x - y);
+      b.rows = nums.map(n => ({ number: n, a: mapA.get(n) || '', b: mapB.get(n) || '' }));
+      b.slides = b.rows.map(r => makeBibleSlide([r]));
+      b.selection = [];
+      b.anchor = null;
+      const book = b.books.find(x => x.id === b.bookId);
+      const bookName = (book && (book.name || book.commonName)) || b.bookId;
+      const vs = BibleAPI.getVersionList();
+      const names = [b.versionA, b.versionB].filter(Boolean).map(id => (vs.find(x => x.id === id) || {}).label);
+      const refTitle = $('#bible-ref-title');
+      if (refTitle) refTitle.textContent = `${bookName} ${b.chapter} · ${names.join(' · ')}`;
+      if (!b.rows.length) toast('No verses found for that chapter.');
+      else if (bNote) toast(bNote);
+      drawVerseList();
     } catch (err) {
-      statusEl.textContent = 'Could not load that chapter: ' + err.message;
+      toast('Could not load that chapter: ' + err.message);
     }
   }
 
   /* ---------------- Live display control ---------------- */
   function pushLive() {
-    const s = state.liveSlides[state.liveIndex];
+    let s = state.liveSlides[state.liveIndex];
+    const o = state.liveOverride;
+    if (o && o.forSlides === state.liveSlides && o.forIndex === state.liveIndex) s = o.slide;
+    else state.liveOverride = null;
     if (!s) return;
+    state.liveNums = s.nums || [];
+    state.liveKey = s.key || '';
     const msg = { type: 'slide', lang: s.lang, title: s.title, text: s.text, ref: s.ref };
+    if (s.footer) { msg.footer = s.footer; msg.footer2 = s.footer2 || ''; msg.title = ''; msg.ref = ''; }
     if (s.text2) { msg.text2 = s.text2; msg.lang2 = s.lang2; }
     ProjectorLink.send(msg);
     renderMiniScreen(s);
@@ -631,6 +755,17 @@
     el.classList.remove('lang-mal', 'lang-hin');
     if (LANG_CLASS[lang]) el.classList.add(LANG_CLASS[lang]);
   }
+  function setPresentFooter(ref, ver) {
+    const el = $('#present-footer');
+    el.textContent = '';
+    if (!ref) return;
+    const r = document.createElement('div'); r.className = 'ref'; r.textContent = ref;
+    el.appendChild(r);
+    if (ver) {
+      const v = document.createElement('div'); v.className = 'ver'; v.textContent = ver;
+      el.appendChild(v);
+    }
+  }
   function updatePresentScreen(msg) {
     if (!state.presentMode || !msg) return;
     const blank = $('#present-blank-overlay');
@@ -642,6 +777,7 @@
       $('#present-text-2').textContent = '';
       $('#present-text-2').classList.add('hidden');
       $('#present-ref').textContent = '';
+      $('#present-footer').textContent = '';
       $('#present-idle').classList.remove('hidden');
       return;
     }
@@ -661,13 +797,20 @@
         text2El.classList.add('hidden');
       }
       $('#present-ref').textContent = msg.ref || '';
+      setPresentFooter(msg.footer, msg.footer2);
+      applyPresentLangClass($('#present-footer'), msg.lang);
 
       const totalLen = (msg.text || '').length + (msg.text2 ? msg.text2.length : 0);
       const size = `calc(${ProjectorLink.pickFontSize(totalLen)} * var(--font-scale))`;
-      $('#present-text').style.fontSize = size;
-      text2El.style.fontSize = size;
+      state.presentBase = size;
+      refitPresent();
     }
   }
+  function refitPresent() {
+    if (!state.presentMode || !state.presentBase) return;
+    ProjectorLink.fitText($('#present-stage-inner'), [$('#present-text'), $('#present-text-2')], state.presentBase);
+  }
+  window.addEventListener('resize', refitPresent);
   function openPresentMode() {
     state.presentMode = true;
     $('#present-overlay').classList.add('on');
@@ -696,6 +839,7 @@
   function applyFontScale() {
     document.documentElement.style.setProperty('--font-scale', state.fontScale);
     $('#font-scale-label').textContent = Math.round(state.fontScale * 100) + '%';
+    if (typeof refitPresent === 'function') refitPresent();
   }
   function adjustFontScale(delta) {
     state.fontScale = Math.max(0.5, Math.min(2, +(state.fontScale + delta).toFixed(2)));
@@ -706,6 +850,15 @@
   $('#btn-font-inc').addEventListener('click', () => adjustFontScale(0.05));
 
   function highlightLiveSlide() {
+    if (state.tab === 'bible') {
+      const b = state.bible;
+      const here = state.liveKey === b.bookId + ':' + b.chapter;
+      const rows = $$('#bible-slides .verse-row');
+      rows.forEach(el => el.classList.toggle('live', here && (state.liveNums || []).includes(Number(el.dataset.num))));
+      const first = rows.find(el => el.classList.contains('live'));
+      if (first) first.scrollIntoView({ block: 'nearest' });
+      return;
+    }
     $$('.verse-slide').forEach((el, i) => el.classList.toggle('live', Number(el.dataset.i) === state.liveIndex));
   }
 
@@ -716,7 +869,7 @@
   }
 
   function startSelectedSongLive() {
-    const song = state.selectedSongId ? SongStore.get(state.selectedSongId) : null;
+    const song = state.selectedSongId ? SongStore.getCached(state.selectedSongId) : null;
     if (!song || !song.slides.length) return;
     state.liveSlides = songToLiveSlides(song);
     state.liveIndex = 0;
@@ -731,6 +884,7 @@
       if (!state.bible.slides.length) return;
       state.liveSlides = state.bible.slides;
       state.liveIndex = 0;
+      state.liveOverride = null;
       pushLive();
       return;
     }
@@ -764,14 +918,31 @@
 
   /* ---------------- Display window management ---------------- */
   $('#btn-open-display').addEventListener('click', () => {
-    state.displayWin = window.open('display.html', 'churchProjectorDisplay', 'width=1280,height=720');
+    state.displayWin = window.open('display.html' + (state.pairCode ? '?code=' + state.pairCode : ''), 'churchProjectorDisplay', 'width=1280,height=720');
     setDisplayStatus(true);
     if (state.liveIndex === -1) startCurrentSelectionLive();
   });
+  // Shows how many display windows are connected online (any device that paired with the
+  // code); falls back to the local popup check when offline.
   function setDisplayStatus(open) {
-    $('#display-dot').classList.toggle('on', open);
-    $('#display-status').textContent = open ? 'Display window open' : 'Display window not open';
+    if (open !== undefined) state.popupOpen = open;
+    const online = ProjectorLink.remote.status === 'online';
+    const n = state.displayCount || 0;
+    let text, on;
+    if (online && n > 0) {
+      text = n === 1 ? '1 display connected' : n + ' displays connected';
+      on = true;
+    } else if (state.popupOpen) {
+      text = online ? 'Display window open (connecting…)' : 'Display window open';
+      on = true;
+    } else {
+      text = online ? 'No display connected' : 'Display window not open';
+      on = false;
+    }
+    $('#display-dot').classList.toggle('on', on);
+    $('#display-status').textContent = text;
   }
+  ProjectorLink.remote.onDisplayCount((n) => { state.displayCount = n; setDisplayStatus(); });
   setInterval(() => {
     if (state.displayWin) setDisplayStatus(!state.displayWin.closed);
   }, 1500);
@@ -801,12 +972,47 @@
   });
 
   /* ---------------- Login gate ---------------- */
+  async function startRemote() {
+    const R = ProjectorLink.remote;
+    R.onStatus((st) => {
+      const text = { online: 'Online: connected', connecting: 'Online: connecting…',
+        offline: 'Online: not connected', error: 'Online: connection problem' }[st] || st;
+      $('#online-status').textContent = text;
+      $('#online-dot').classList.toggle('on', st === 'online');
+      setDisplayStatus();
+    });
+    R.onTakeover(() => $('#takeover-overlay').classList.remove('hidden'));
+    try {
+      const res = await R.startControl({
+        confirmTakeover: async () => confirm('Another device is controlling the projector. Take over?')
+      });
+      if (res.declined) {
+        $('#takeover-overlay').classList.remove('hidden');
+        return;
+      }
+      state.pairCode = res.code;
+      $('#pair-code').textContent = res.code;
+      $('#pair-row').style.display = '';
+    } catch (e) {
+      console.warn('Online mode unavailable, working locally:', e);
+      $('#online-status').textContent = 'Online: ' + (e && e.message ? e.message : 'connection problem');
+    }
+  }
+  $('#btn-take-back').addEventListener('click', () => location.reload());
+  $('#btn-copy-display-link').addEventListener('click', async () => {
+    const url = new URL('display.html', location.href);
+    url.searchParams.set('code', state.pairCode);
+    try { await navigator.clipboard.writeText(url.href); toast('Display link copied'); }
+    catch (e) { prompt('Copy this link:', url.href); }
+  });
+
   async function startApp() {
+    startRemote();
     applyTheme(ProjectorLink.getTheme());
     state.fontScale = ProjectorLink.getFontScale();
     applyFontScale();
     await SongStore.seedIfEmpty();
-    renderList();
+    await refreshList();
     renderStage();
   }
 
@@ -816,11 +1022,11 @@
     startApp();
   }
 
-  $('#login-form').addEventListener('submit', (e) => {
+  $('#login-form').addEventListener('submit', async (e) => {
     e.preventDefault();
     const u = $('#f-login-user').value.trim();
     const p = $('#f-login-pass').value;
-    if (Auth.login(u, p)) {
+    if (await Auth.login(u, p)) {
       $('#login-error').classList.add('hidden');
       showApp();
     } else {
@@ -830,16 +1036,16 @@
     }
   });
 
-  $('#btn-logout').addEventListener('click', () => {
+  $('#btn-logout').addEventListener('click', async () => {
     if (!confirm('Log out of the control panel?')) return;
-    Auth.logout();
+    await ProjectorLink.remote.release();
+    await Auth.logout();
     location.reload();
   });
 
   /* ---------------- Boot ---------------- */
-  if (Auth.isLoggedIn()) {
-    showApp();
-  } else {
-    $('#f-login-user').focus();
-  }
+  Auth.isLoggedIn().then((ok) => {
+    if (ok) showApp();
+    else $('#f-login-user').focus();
+  });
 })();

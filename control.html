@@ -51,6 +51,14 @@
       <div class="dot" id="display-dot"></div>
       <span id="display-status">Display window not open</span>
     </div>
+    <div class="status-row">
+      <div class="dot" id="online-dot"></div>
+      <span id="online-status">Online: not connected</span>
+    </div>
+    <div class="status-row" id="pair-row" style="display:none">
+      <span>Display code: <strong id="pair-code" style="letter-spacing:0.15em"></strong></span>
+      <button class="btn btn-small" id="btn-copy-display-link" title="Copy a link that opens the display already paired">Copy link</button>
+    </div>
     <div class="mini-screen" id="mini-screen">Nothing live yet</div>
 
     <div class="controls-block">
@@ -83,6 +91,7 @@
     </div>
     <div id="present-ref"></div>
   </div>
+  <div id="present-footer"></div>
   <div id="present-idle">Waiting for control panel…</div>
   <div id="present-blank-overlay"></div>
   <div class="present-hint">Up/Down or Space to navigate · Esc to exit</div>
@@ -93,21 +102,31 @@
     <div class="mark">Verse<em>Deck</em></div>
     <div class="meta">Sign in to open the control panel</div>
     <div class="field">
-      <label>Username</label>
-      <input type="text" id="f-login-user" autocomplete="username" autocapitalize="off" spellcheck="false">
+      <label>Email</label>
+      <input type="email" id="f-login-user" autocomplete="username" autocapitalize="off" spellcheck="false">
     </div>
     <div class="field">
       <label>Password</label>
       <input type="password" id="f-login-pass" autocomplete="current-password">
     </div>
-    <div class="login-error hidden" id="login-error">Incorrect username or password.</div>
+    <div class="login-error hidden" id="login-error">Incorrect email or password.</div>
     <button type="submit" class="btn btn-gold" style="width:100%;">Log in</button>
   </form>
+</div>
+
+<div class="login-overlay hidden" id="takeover-overlay">
+  <div class="login-box">
+    <div class="mark">Verse<em>Deck</em></div>
+    <div class="meta">Another device took over</div>
+    <button class="btn btn-gold" id="btn-take-back" style="width:100%;">Take control back</button>
+  </div>
 </div>
 
 <div class="toast" id="toast"></div>
 
 <script src="js/link.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
+<script src="js/config.js"></script>
 <script src="js/auth.js"></script>
 <script src="js/store.js"></script>
 <script src="js/bible.js"></script>

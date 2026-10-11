@@ -31,6 +31,7 @@ html,body{
 }
 body{
   display:flex;
+  flex-direction:column;
   align-items:center;
   justify-content:center;
   font-family:var(--font-display);
@@ -51,7 +52,13 @@ body.show-cursor{ cursor:default; }
 #stage-inner{
   width:100%;
   max-width:1600px;
-  padding:6vh 8vw;
+  flex:1 1 0;              /* takes the space above the footer, never overlaps it */
+  min-height:0;
+  overflow:hidden;
+  display:flex;
+  flex-direction:column;
+  justify-content:center;
+  padding:5vh 8vw 2vh;
   text-align:center;
 }
 
@@ -109,3 +116,28 @@ body.show-cursor{ cursor:default; }
 }
 
 .hidden{ display:none !important; }
+
+#net-status{
+  position:fixed; right:12px; bottom:10px;
+  font:500 12px var(--font-ui);
+  color:var(--stage-dim);
+  pointer-events:none;
+}
+#net-status:empty{ display:none; }
+
+/* Bible reference (prominent) with the version(s) in small type under it, bottom centre.
+   In normal flow below the text area so long verses can't run into it. */
+#verse-footer{
+  flex:none;
+  width:100%;
+  padding:0 4vw 3vh;
+  text-align:center;
+  font-family:var(--font-ui);
+  color:rgba(var(--stage-text-rgb),0.8);
+  z-index:5;
+}
+#verse-footer:empty{ display:none; }
+#verse-footer .ref{ font-size:calc(2vw * var(--font-scale)); line-height:1.15; font-weight:500; letter-spacing:0.03em; }
+#verse-footer .ver{ margin-top:0.2vh; font-size:calc(0.85vw * var(--font-scale)); line-height:1.1; color:rgba(var(--stage-text-rgb),0.5); letter-spacing:0.08em; text-transform:uppercase; }
+#verse-footer.lang-mal .ref{ font-family:'Noto Sans Malayalam', var(--font-ui); }
+#verse-footer.lang-hin .ref{ font-family:'Noto Sans Devanagari', var(--font-ui); }
