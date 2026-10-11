@@ -91,3 +91,18 @@ alter publication supabase_realtime add table public.live_state;
 
 -- Migration for projects created before the heartbeat column existed (safe to re-run):
 alter table public.sessions add column if not exists active_control_at timestamptz;
+
+-- ---------- services (ordered running order for a service) ----------
+-- items: [{ id, type:'song'|'bible'|'custom', ... }] — see js/service.js.
+create table if not exists public.services (
+  id           uuid primary key default gen_random_uuid(),
+  name         text not null default 'Service',
+  service_date date,
+  items        jsonb not null default '[]',
+  created_at   timestamptz not null default now(),
+  updated_at   timestamptz not null default now()
+);
+alter table public.services enable row level security;
+drop policy if exists services_auth_all on public.services;
+create policy services_auth_all on public.services
+  for all to authenticated using (true) with check (true);

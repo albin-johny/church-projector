@@ -18,6 +18,7 @@
     presentMode: false,
     fontScale: 1,
     custom: { text: '', slides: [] },
+    service: { loaded: false, loading: false, name: 'Service', items: [], active: -1, slides: [], error: null },
     bible: {
       versionA: 'eng_kjv',   // first (left) version — also supplies the book list
       versionB: '',          // optional second version shown beside it
@@ -30,16 +31,6 @@
       anchor: null           // row index shift-click ranges extend from
     }
   };
-
-  // Phone/tablet layout shows one screen at a time: the library list or the content. On
-  // desktop the view classes have no effect.
-  function setMobileView(view) {
-    const root = $('#app-root');
-    root.classList.toggle('view-stage', view === 'stage');
-    root.classList.toggle('view-list', view !== 'stage');
-    if (view === 'stage') $('#stage').scrollTop = 0;
-  }
-  $('#btn-mobile-back').addEventListener('click', () => setMobileView('list'));
 
   function toast(msg) {
     const t = $('#toast');
@@ -54,8 +45,8 @@
     state.tab = tab;
     $$('.tab-btn').forEach(b => b.classList.toggle('active', b.dataset.tab === tab));
     $('#songs-search-wrap').style.display = tab === 'songs' ? '' : 'none';
+    $('#bible-jump-wrap').style.display = tab === 'bible' ? '' : 'none';
     $('#songs-footer').style.display = tab === 'songs' ? '' : 'none';
-    setMobileView(tab === 'custom' ? 'stage' : 'list');
     refreshList();
     renderStage();
   }
@@ -88,6 +79,7 @@
     const list = $('#song-list');
     list.classList.toggle('bible-mode', state.tab === 'bible');
     if (state.tab === 'bible') { renderBibleRail(); return; }
+    if (state.tab === 'service') { renderServiceRail(); return; }
     if (state.tab !== 'songs') {
       list.innerHTML = '';
       return;
@@ -124,7 +116,6 @@
       state.songMode = 'view';
       renderList();
       renderStage();
-      setMobileView('stage');
     }));
     $$('.star-btn').forEach(el => el.addEventListener('click', async (e) => {
       e.stopPropagation();
@@ -210,12 +201,13 @@
     setTab('songs');
     renderStage();
   }
-  $('#btn-new-song').addEventListener('click', () => { newSongDraft(); setMobileView('stage'); });
+  $('#btn-new-song').addEventListener('click', newSongDraft);
 
   function renderStage() {
     const stage = $('#stage');
     if (state.tab === 'bible') { renderBibleStage(); return; }
     if (state.tab === 'custom') { renderCustomStage(); return; }
+    if (state.tab === 'service') { renderServiceStage(); return; }
 
     if (state.songMode === 'edit' && state.editingDraft) { renderSongEditor(); return; }
 
@@ -244,6 +236,7 @@
       <div class="row">
         <button class="btn btn-gold" id="btn-edit-song">Edit</button>
         <button class="btn" id="btn-toggle-setlist">${song.inSetlist ? '★ Bookmarked — remove' : '☆ Add to bookmarks'}</button>
+        <button class="btn" id="btn-add-service">＋ Add to service</button>
       </div>
       <div id="slide-preview" class="verse-slides"></div>
     `;
@@ -252,6 +245,9 @@
       loadSongIntoEditor(song.id);
       renderStage();
     });
+    $('#btn-add-service').addEventListener('click', () => addToService({
+      type: 'song', songId: song.id, title: song.title, sub: `Song · ${langLabel(song.language)}`
+    }));
     $('#btn-toggle-setlist').addEventListener('click', async () => {
       try { await SongStore.toggleSetlist(song.id); }
       catch (err) { toast('Could not update bookmark: ' + err.message); return; }
@@ -338,7 +334,7 @@
     $('#btn-save-song').addEventListener('click', saveSongFromEditor);
     $('#btn-cancel-edit').addEventListener('click', () => {
       if (d.id) { state.songMode = 'view'; }
-      else { state.selectedSongId = null; state.editingDraft = null; setMobileView('list'); }
+      else { state.selectedSongId = null; state.editingDraft = null; }
       renderStage();
     });
     if (d.id) $('#btn-delete-song').addEventListener('click', async () => {
@@ -349,7 +345,6 @@
       state.editingDraft = null;
       state.songMode = 'view';
       await refreshList(); renderStage();
-      setMobileView('list');
       toast('Song deleted');
     });
     renderSlidePreview();
@@ -472,8 +467,15 @@
         <textarea id="f-custom-text" placeholder="Welcome everyone!&#10;&#10;Please silence your phones during the service.">${escapeHtml(c.text)}</textarea>
         <div class="hint">A blank line between paragraphs becomes a new slide, just like the song editor.</div>
       </div>
+      <div class="row"><button class="btn" id="btn-custom-add-service">＋ Add to service</button></div>
       <div id="custom-preview" class="verse-slides"></div>
     `;
+    $('#btn-custom-add-service').addEventListener('click', () => {
+      const text = c.text.trim();
+      if (!text) { toast('Type something first'); return; }
+      const first = text.split('\n').find(l => l.trim()) || 'Custom';
+      addToService({ type: 'custom', text, title: first.length > 40 ? first.slice(0, 40) + '…' : first, sub: 'Custom text' });
+    });
     $('#f-custom-text').addEventListener('input', () => { c.text = $('#f-custom-text').value; renderCustomPreview(); });
     renderCustomPreview();
   }
@@ -528,7 +530,6 @@
       b.chapter = Number(el.dataset.ch);
       renderBibleRail();
       loadChapter();
-      setMobileView('stage');
     }));
     // Keep the selected book in view when the rail is re-drawn.
     const sel = list.querySelector('.bible-book.selected');
@@ -574,6 +575,7 @@
           <div class="field"><label>Version 2 (optional)</label><select id="f-version-b">${versionOptions(b.versionB, true)}</select></div>
         </div>
         <div class="hint">Click a verse to show it. Shift+click to show a range, Ctrl/⌘+click to add or remove single verses.</div>
+        <div class="row"><button class="btn btn-small" id="btn-bible-add-service">＋ Add selected verses to service</button></div>
         <div id="bible-slides" class="verse-slides"></div>
       </div>
     `;
@@ -589,6 +591,14 @@
       if (b.versionB === b.versionA) { b.versionB = ''; $('#f-version-b').value = ''; }
       saveBiblePrefs();
       loadChapter();
+    });
+    $('#btn-bible-add-service').addEventListener('click', () => {
+      if (!b.selection.length) { toast('Click or shift-click the verses first'); return; }
+      const slide = makeBibleSlide(b.selection.map(k => b.rows[k]));
+      addToService({
+        type: 'bible', versionA: b.versionA, versionB: b.versionB, bookId: b.bookId,
+        chapter: b.chapter, nums: slide.nums, title: slide.footer, sub: slide.footer2
+      });
     });
     renderBibleRail();
     drawVerseList();
@@ -626,16 +636,23 @@
   // second-version text). The footer is what the display shows bottom-centre.
   function makeBibleSlide(rows) {
     const b = state.bible;
+    const book = b.books.find(x => x.id === b.bookId);
+    return composeBibleSlide(rows, {
+      versionA: b.versionA, versionB: b.versionB, bookId: b.bookId, chapter: b.chapter,
+      bookName: (book && (book.name || book.commonName)) || b.bookId
+    });
+  }
+
+  // Pure builder shared with the Service tab: rows [{number, a, b}] + which versions/book.
+  function composeBibleSlide(rows, o) {
     const vs = BibleAPI.getVersionList();
-    const vA = vs.find(x => x.id === b.versionA) || {};
-    const vB = vs.find(x => x.id === b.versionB) || {};
+    const vA = vs.find(x => x.id === o.versionA) || {};
+    const vB = vs.find(x => x.id === o.versionB) || {};
     const aText = rows.map(r => r.a).filter(Boolean).join(' ');
     const bText = rows.map(r => r.b).filter(Boolean).join(' ');
     const nums = rows.map(r => r.number);
     const ref = compactRef(nums);
-    const book = b.books.find(x => x.id === b.bookId);
-    const bookName = (book && (book.name || book.commonName)) || b.bookId;
-    const slide = { nums, ref, key: b.bookId + ':' + b.chapter, title: `${bookName} ${b.chapter}` };
+    const slide = { nums, ref, key: o.bookId + ':' + o.chapter, title: `${o.bookName} ${o.chapter}` };
     let labels;
     if (aText) {
       Object.assign(slide, { text: aText, lang: vA.langKey });
@@ -645,7 +662,7 @@
       Object.assign(slide, { text: bText, lang: vB.langKey });
       labels = [vB.label];
     }
-    slide.footer = `${bookName} ${b.chapter}:${ref}`;          // reference, prominent
+    slide.footer = `${o.bookName} ${o.chapter}:${ref}`;        // reference, prominent
     slide.footer2 = labels.filter(Boolean).join(' · ');        // version(s), small, beneath
     return slide;
   }
@@ -662,7 +679,7 @@
     const labelB = (vs.find(x => x.id === b.versionB) || {}).label || '';
     const head = two ? `<div class="verse-head two"><span></span><span>${escapeHtml(labelA)}</span><span>${escapeHtml(labelB)}</span></div>` : '';
     box.innerHTML = head + b.rows.map((r, i) => `
-      <div class="verse-slide verse-row ${two ? 'two' : ''}" data-i="${i}" data-num="${r.number}">
+      <div class="verse-slide verse-row ${two ? 'two' : ''} ${b.selection.includes(i) ? 'picked' : ''}" data-i="${i}" data-num="${r.number}">
         <span class="vnum">${r.number}</span>
         <div class="vtext">${escapeHtml(r.a)}</div>
         ${two ? `<div class="vtext vtext-b">${escapeHtml(r.b)}</div>` : ''}
@@ -696,9 +713,15 @@
     showBibleSelection();
   }
 
+  function markPicked() {
+    const b = state.bible;
+    $$('#bible-slides .verse-row').forEach((el, i) => el.classList.toggle('picked', b.selection.includes(i)));
+  }
+
   function showBibleSelection() {
     const b = state.bible;
     if (!b.selection.length) return;
+    markPicked();
     const last = b.selection[b.selection.length - 1];
     state.liveSlides = b.slides;
     state.liveIndex = last;       // Next/Prev continue one verse at a time from here
@@ -743,6 +766,309 @@
     } catch (err) {
       toast('Could not load that chapter: ' + err.message);
     }
+  }
+
+  /* ---------------- Bible reference jump box ---------------- */
+  // "John 3:16" -> Enter jumps to the book/chapter and selects the verses; Enter again (or the
+  // "Show on screen" button) puts them on the projector. English names only, any version.
+  const jumpState = { shownFor: '' };   // normalised input that is currently jumped-to
+  const jumpEl = $('#bible-jump');
+  const jumpHint = $('#bible-jump-hint');
+
+  function jumpLabel(p) {
+    const b = state.bible;
+    const bookId = p.bookId || b.bookId;
+    const chapter = p.chapter !== undefined ? p.chapter : (p.bookId ? 1 : b.chapter);
+    let t = `${BibleAPI.bookName(bookId)} ${chapter}`;
+    if (p.verses && p.verses.length) {
+      const nums = p.verses.slice().sort((x, y) => x - y);
+      t += ':' + compactRef(nums);
+    }
+    return t;
+  }
+
+  function updateJumpHint() {
+    const raw = jumpEl.value;
+    jumpState.shownFor = '';
+    if (!raw.trim()) { jumpHint.className = 'jump-hint'; jumpHint.textContent = ''; return; }
+    const p = BibleAPI.parseReference(raw);
+    if (p.ok) {
+      jumpHint.className = 'jump-hint ok';
+      jumpHint.textContent = `Enter → ${jumpLabel(p)}`;
+    } else if (p.matches) {
+      jumpHint.className = 'jump-hint';
+      jumpHint.innerHTML = p.matches.map(id =>
+        `<button type="button" data-book="${id}">${escapeHtml(BibleAPI.bookName(id))}</button>`).join('');
+      jumpHint.querySelectorAll('button').forEach(btn => btn.addEventListener('click', () => {
+        const rest = raw.trim().match(/\d.*$/);   // keep any "3:16" already typed
+        jumpEl.value = BibleAPI.bookName(btn.dataset.book) + ' ' + (rest ? rest[0] : '');
+        jumpEl.focus();
+        updateJumpHint();
+      }));
+    } else {
+      jumpHint.className = 'jump-hint err';
+      jumpHint.textContent = p.message || '';
+    }
+  }
+
+  async function runJump() {
+    const b = state.bible;
+    const p = BibleAPI.parseReference(jumpEl.value);
+    if (!p.ok) { updateJumpHint(); return; }
+    const bookId = p.bookId || b.bookId;
+    const chapter = p.chapter !== undefined ? p.chapter : (p.bookId ? 1 : b.chapter);
+    const book = b.books.find(x => x.id === bookId);
+    if (!book) { jumpHint.className = 'jump-hint err'; jumpHint.textContent = 'That book isn’t in this version.'; return; }
+    if (chapter < 1 || chapter > book.chapters) {
+      jumpHint.className = 'jump-hint err';
+      jumpHint.textContent = `${BibleAPI.bookName(bookId)} has ${book.chapters} chapter${book.chapters === 1 ? '' : 's'}.`;
+      return;
+    }
+    b.bookId = bookId;
+    b.chapter = chapter;
+    renderBibleRail();
+    await loadChapter();
+    let note = '';
+    if (p.verses && p.verses.length) {
+      const idx = [];
+      const missing = [];
+      p.verses.forEach(n => {
+        const k = b.rows.findIndex(r => r.number === n);
+        if (k >= 0) idx.push(k); else missing.push(n);
+      });
+      b.selection = idx.sort((x, y) => x - y);
+      b.anchor = b.selection.length ? b.selection[0] : null;
+      markPicked();
+      if (missing.length) note = ` (no verse ${compactRef(missing)})`;
+      const first = $$('#bible-slides .verse-row')[b.selection[0]];
+      if (first) first.scrollIntoView({ block: 'center' });
+    }
+    jumpState.shownFor = jumpEl.value.trim().toLowerCase();
+    jumpHint.className = 'jump-hint ok';
+    if (b.selection.length) {
+      jumpHint.innerHTML = `${escapeHtml(jumpLabel(p))}${escapeHtml(note)} <button type="button" class="show-btn">Show on screen</button>`;
+      jumpHint.querySelector('.show-btn').addEventListener('click', () => { showBibleSelection(); jumpEl.blur(); });
+    } else {
+      jumpHint.textContent = `${jumpLabel(p)} — click a verse to show it`;
+    }
+  }
+
+  jumpEl.addEventListener('input', updateJumpHint);
+  jumpEl.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      const same = jumpEl.value.trim().toLowerCase() === jumpState.shownFor;
+      if (same && state.bible.selection.length) { showBibleSelection(); jumpEl.blur(); }
+      else runJump();
+    } else if (e.key === 'Escape') {
+      jumpEl.blur();
+    }
+  });
+
+  /* ---------------- Service order (running order) ---------------- */
+  const svc = () => state.service;
+  let svcLoadToken = 0;
+
+  async function ensureService() {
+    const sv = svc();
+    if (sv.loaded) return;
+    if (sv.loading) { await sv.loading; return; }
+    sv.loading = ServiceStore.load().then((cur) => {
+      sv.id = cur.id; sv.name = cur.name; sv.items = cur.items; sv.loaded = true; sv.error = null;
+    }).catch((e) => { sv.error = e.message; }).finally(() => { sv.loading = null; });
+    await sv.loading;
+  }
+
+  async function saveServiceItems(items) {
+    const sv = svc();
+    const prev = sv.items;
+    sv.items = items;
+    try { await ServiceStore.saveItems(items); }
+    catch (e) { sv.items = prev; toast('Could not save the service: ' + e.message); return false; }
+    return true;
+  }
+
+  async function addToService(item) {
+    await ensureService();
+    const sv = svc();
+    if (sv.error) { toast('Service unavailable: ' + sv.error); return; }
+    item.id = ServiceStore.uid();
+    const ok = await saveServiceItems(sv.items.concat([item]));
+    if (!ok) return;
+    toast(`Added “${item.title}” to the service (${sv.items.length} item${sv.items.length === 1 ? '' : 's'})`);
+    if (state.tab === 'service') renderList();
+  }
+
+  // Builds the projector slides for one service item.
+  async function buildServiceSlides(item) {
+    if (item.type === 'song') {
+      const song = await SongStore.get(item.songId);
+      if (!song) throw new Error('This song is no longer in the library.');
+      return songToLiveSlides(song);
+    }
+    if (item.type === 'custom') {
+      const raw = parseSlides(item.text || '');
+      return raw.map((t, i) => ({ text: t, ref: `${i + 1}/${raw.length}`, title: '', lang: 'en' }));
+    }
+    if (item.type === 'bible') {
+      const books = await BibleAPI.getBooks(item.versionA);
+      const book = books.find(x => x.id === item.bookId);
+      const mapFor = async (id) => {
+        if (!id) return new Map();
+        try {
+          const verses = BibleAPI.extractVerses(await BibleAPI.getChapter(id, item.bookId, item.chapter));
+          return new Map(verses.map(v => [v.number, v.text]));
+        } catch (e) { return new Map(); }
+      };
+      const [mA, mB] = await Promise.all([mapFor(item.versionA), mapFor(item.versionB)]);
+      const rows = item.nums.map(n => ({ number: n, a: mA.get(n) || '', b: mB.get(n) || '' }));
+      return [composeBibleSlide(rows, {
+        versionA: item.versionA, versionB: item.versionB, bookId: item.bookId, chapter: item.chapter,
+        bookName: (book && (book.name || book.commonName)) || item.bookId
+      })];
+    }
+    return [];
+  }
+
+  // Loads item i into the centre pane; with {live:true} also puts its first slide on screen.
+  async function selectServiceItem(i, { live = false } = {}) {
+    const sv = svc();
+    if (i < 0 || i >= sv.items.length) return;
+    const token = ++svcLoadToken;
+    sv.active = i;
+    sv.slides = [];
+    sv.itemError = null;
+    renderList();
+    renderStage();
+    try {
+      const slides = await buildServiceSlides(sv.items[i]);
+      if (token !== svcLoadToken) return;
+      sv.slides = slides;
+    } catch (e) {
+      if (token !== svcLoadToken) return;
+      sv.itemError = e.message;
+    }
+    renderStage();
+    if (live && sv.slides.length) {
+      state.liveSlides = sv.slides;
+      state.liveIndex = 0;
+      state.liveOverride = null;
+      pushLive();
+    }
+  }
+
+  async function moveServiceItem(i, delta) {
+    const sv = svc();
+    const j = i + delta;
+    if (j < 0 || j >= sv.items.length) return;
+    const items = sv.items.slice();
+    [items[i], items[j]] = [items[j], items[i]];
+    const activeId = sv.active >= 0 ? sv.items[sv.active].id : null;
+    if (!(await saveServiceItems(items))) return;
+    sv.active = activeId ? items.findIndex(x => x.id === activeId) : -1;
+    renderList();
+  }
+
+  async function removeServiceItem(i) {
+    const sv = svc();
+    const activeId = sv.active >= 0 ? sv.items[sv.active].id : null;
+    const items = sv.items.filter((_, k) => k !== i);
+    if (!(await saveServiceItems(items))) return;
+    sv.active = activeId ? items.findIndex(x => x.id === activeId) : -1;
+    if (sv.active === -1) sv.slides = [];
+    renderList();
+    renderStage();
+  }
+
+  function renderServiceRail() {
+    const list = $('#song-list');
+    const sv = svc();
+    $('#library-count').textContent = sv.loaded ? `Service · ${sv.items.length} item${sv.items.length === 1 ? '' : 's'}` : 'Service';
+    if (!sv.loaded) {
+      if (sv.error) {
+        list.innerHTML = `<div class="empty-note">Could not load the service:<br>${escapeHtml(sv.error)}</div>`;
+        return;
+      }
+      list.innerHTML = `<div class="empty-note">Loading service…</div>`;
+      ensureService().then(() => { if (state.tab === 'service') { renderList(); renderStage(); } });
+      return;
+    }
+    const bar = `
+      <div class="svc-bar">
+        <button class="btn btn-small" id="btn-svc-prev">◀ Prev item</button>
+        <button class="btn btn-small btn-gold" id="btn-svc-next">Next item ▶</button>
+      </div>`;
+    if (!sv.items.length) {
+      list.innerHTML = bar + `<div class="empty-note">The service is empty.<br>Open a song, Bible verses or Custom text and use “Add to service”.</div>`;
+    } else {
+      list.innerHTML = bar + sv.items.map((it, i) => `
+        <div class="list-item svc-item ${i === sv.active ? 'selected' : ''}" data-i="${i}">
+          <span class="svc-num">${i + 1}</span>
+          <div class="item-main">
+            <div class="t1">${escapeHtml(it.title || '')}</div>
+            <div class="t2">${escapeHtml(it.sub || it.type)}</div>
+          </div>
+          <div class="svc-actions">
+            <button class="star-btn" data-act="up" title="Move up" ${i === 0 ? 'disabled' : ''}>▲</button>
+            <button class="star-btn" data-act="down" title="Move down" ${i === sv.items.length - 1 ? 'disabled' : ''}>▼</button>
+            <button class="star-btn" data-act="del" title="Remove from service">✕</button>
+          </div>
+        </div>`).join('');
+    }
+    $('#btn-svc-prev').addEventListener('click', () => {
+      const i = sv.active <= 0 ? 0 : sv.active - 1;
+      selectServiceItem(i, { live: true });
+    });
+    $('#btn-svc-next').addEventListener('click', () => {
+      const i = sv.active < 0 ? 0 : Math.min(sv.items.length - 1, sv.active + 1);
+      selectServiceItem(i, { live: true });
+    });
+    $$('.svc-item').forEach(el => {
+      const i = Number(el.dataset.i);
+      el.addEventListener('click', () => selectServiceItem(i));
+      el.querySelectorAll('[data-act]').forEach(btn => btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const act = btn.dataset.act;
+        if (act === 'up') moveServiceItem(i, -1);
+        else if (act === 'down') moveServiceItem(i, 1);
+        else if (act === 'del') removeServiceItem(i);
+      }));
+    });
+  }
+
+  function renderServiceStage() {
+    const stage = $('#stage');
+    const sv = svc();
+    if (!sv.loaded) {
+      stage.innerHTML = `<div class="empty-note" style="padding-top:80px;">${sv.error ? 'Could not load the service: ' + escapeHtml(sv.error) : 'Loading service…'}</div>`;
+      return;
+    }
+    const it = sv.items[sv.active];
+    if (!it) {
+      stage.innerHTML = `
+        <h1>${escapeHtml(sv.name)}</h1>
+        <div class="meta">${sv.items.length} item${sv.items.length === 1 ? '' : 's'}</div>
+        <div class="empty-note" style="padding-top:40px;">Pick an item on the left to load it, then click a slide — or press “Next item” to put it on screen.</div>`;
+      return;
+    }
+    stage.innerHTML = `
+      <h1>${escapeHtml(it.title || '')}</h1>
+      <div class="meta">Item ${sv.active + 1} of ${sv.items.length} · ${escapeHtml(it.sub || it.type)}</div>
+      ${sv.itemError ? `<div class="empty-note">${escapeHtml(sv.itemError)}</div>` : ''}
+      <div id="svc-slides" class="verse-slides"></div>`;
+    const box = $('#svc-slides');
+    box.innerHTML = sv.slides.map((s, i) => `
+      <div class="verse-slide" data-i="${i}">
+        <span class="slide-label">Slide ${i + 1} of ${sv.slides.length} — click to show</span>${escapeHtml(s.text)}
+        ${s.text2 ? `<div class="verse-slide-secondary">${escapeHtml(s.text2)}</div>` : ''}
+      </div>`).join('');
+    $$('#svc-slides .verse-slide').forEach(el => el.addEventListener('click', () => {
+      state.liveSlides = sv.slides;
+      state.liveIndex = Number(el.dataset.i);
+      state.liveOverride = null;
+      pushLive();
+    }));
+    highlightLiveSlide();
   }
 
   /* ---------------- Live display control ---------------- */
@@ -895,8 +1221,18 @@
   // "Open display" / "Present" when nothing is live yet.
   function startCurrentSelectionLive() {
     if (state.tab === 'bible') {
+      if (state.bible.selection.length) { showBibleSelection(); return; }
       if (!state.bible.slides.length) return;
       state.liveSlides = state.bible.slides;
+      state.liveIndex = 0;
+      state.liveOverride = null;
+      pushLive();
+      return;
+    }
+    if (state.tab === 'service') {
+      const sv = svc();
+      if (!sv.slides.length) return;
+      state.liveSlides = sv.slides;
       state.liveIndex = 0;
       state.liveOverride = null;
       pushLive();
@@ -965,6 +1301,7 @@
   window.addEventListener('keydown', (e) => {
     if (e.key === 'Escape' && state.presentMode) { closePresentMode(); return; }
     if (['INPUT', 'TEXTAREA', 'SELECT'].includes(document.activeElement.tagName)) return;
+    if (e.key === '/' && state.tab === 'bible') { e.preventDefault(); jumpEl.focus(); jumpEl.select(); return; }
     if (e.key === 'ArrowRight' || e.key === 'ArrowDown') { e.preventDefault(); $('#btn-next').click(); }
     if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') { e.preventDefault(); $('#btn-prev').click(); }
     if (e.key.toLowerCase() === 'b') $('#btn-blank').click();

@@ -121,6 +121,105 @@ const BibleAPI = (() => {
     return slides;
   }
 
+  // ---------- Reference parsing ("John 3:16", "1 cor 13:4-7", "ps 23") ----------
+  // English names/abbreviations only — used for every version, including Malayalam/Hindi.
+  // [bookId, full name, ...aliases]; spaces are ignored when matching.
+  const BOOK_ALIASES = [
+    ['GEN','Genesis','gen','ge','gn'], ['EXO','Exodus','exod','exo','ex'],
+    ['LEV','Leviticus','lev','le','lv'], ['NUM','Numbers','num','nu','nm','nb'],
+    ['DEU','Deuteronomy','deut','deu','de','dt'], ['JOS','Joshua','josh','jos','jsh'],
+    ['JDG','Judges','judg','jdg','jg','jdgs'], ['RUT','Ruth','rut','ru','rth'],
+    ['1SA','1 Samuel','1sam','1sa','1sm'], ['2SA','2 Samuel','2sam','2sa','2sm'],
+    ['1KI','1 Kings','1kgs','1ki','1kin'], ['2KI','2 Kings','2kgs','2ki','2kin'],
+    ['1CH','1 Chronicles','1chron','1chr','1ch'], ['2CH','2 Chronicles','2chron','2chr','2ch'],
+    ['EZR','Ezra','ezr'], ['NEH','Nehemiah','neh','ne'], ['EST','Esther','esth','est'],
+    ['JOB','Job','jb'], ['PSA','Psalms','psalm','ps','psa','pss','psm'],
+    ['PRO','Proverbs','prov','pro','pr','prv'], ['ECC','Ecclesiastes','eccl','eccles','ecc','ec'],
+    ['SNG','Song of Solomon','song of songs','song','sos','sng','sg','canticles'],
+    ['ISA','Isaiah','isa','is'], ['JER','Jeremiah','jer','je','jr'],
+    ['LAM','Lamentations','lam','la'], ['EZK','Ezekiel','ezek','eze','ezk'],
+    ['DAN','Daniel','dan','da','dn'], ['HOS','Hosea','hos','ho'], ['JOL','Joel','joe','jl'],
+    ['AMO','Amos','amo','am'], ['OBA','Obadiah','obad','oba','ob'], ['JON','Jonah','jnh','jon'],
+    ['MIC','Micah','mic','mi'], ['NAM','Nahum','nah','nam','na'], ['HAB','Habakkuk','hab','hb'],
+    ['ZEP','Zephaniah','zeph','zep','zp'], ['HAG','Haggai','hag','hg'],
+    ['ZEC','Zechariah','zech','zec','zc'], ['MAL','Malachi','mal','ml'],
+    ['MAT','Matthew','matt','mat','mt'], ['MRK','Mark','mrk','mar','mk','mr'],
+    ['LUK','Luke','luk','lk'], ['JHN','John','jhn','joh','jn'], ['ACT','Acts','act','ac'],
+    ['ROM','Romans','rom','ro','rm'], ['1CO','1 Corinthians','1cor','1co'],
+    ['2CO','2 Corinthians','2cor','2co'], ['GAL','Galatians','gal','ga'],
+    ['EPH','Ephesians','ephes','eph'], ['PHP','Philippians','phil','php','pp'],
+    ['COL','Colossians','col'], ['1TH','1 Thessalonians','1thess','1thes','1th'],
+    ['2TH','2 Thessalonians','2thess','2thes','2th'], ['1TI','1 Timothy','1tim','1ti'],
+    ['2TI','2 Timothy','2tim','2ti'], ['TIT','Titus','tit','ti'],
+    ['PHM','Philemon','philem','phm'], ['HEB','Hebrews','heb'], ['JAS','James','jas','jam','jm'],
+    ['1PE','1 Peter','1pet','1pe','1pt'], ['2PE','2 Peter','2pet','2pe','2pt'],
+    ['1JN','1 John','1jn','1jo','1joh'], ['2JN','2 John','2jn','2jo','2joh'],
+    ['3JN','3 John','3jn','3jo','3joh'], ['JUD','Jude','jud'],
+    ['REV','Revelation','revelations','rev','re','apocalypse']
+  ];
+  const norm = (x) => x.toLowerCase().replace(/[^a-z0-9]/g, '');
+  const ALIAS_INDEX = []; // [{ key, id }]
+  BOOK_ALIASES.forEach(([id, name, ...aliases]) => {
+    [name, ...aliases].forEach(a => ALIAS_INDEX.push({ key: norm(a), id }));
+  });
+  const BOOK_NAME_BY_ID = {};
+  BOOK_ALIASES.forEach(([id, name]) => { BOOK_NAME_BY_ID[id] = name; });
+
+  // Books whose name/abbreviation equals (exact) or starts with (prefix) the typed text.
+  function matchBooks(text) {
+    const k = norm(text);
+    if (!k) return [];
+    const exact = ALIAS_INDEX.filter(a => a.key === k).map(a => a.id);
+    if (exact.length) return Array.from(new Set(exact));
+    const ids = ALIAS_INDEX.filter(a => a.key.startsWith(k)).map(a => a.id);
+    const set = new Set(ids);
+    return BOOK_ALIASES.map(b => b[0]).filter(id => set.has(id));
+  }
+
+  function expandVerses(spec) {
+    const out = [];
+    spec.split(',').forEach(part => {
+      const m = part.trim().match(/^(\d+)(?:\s*-\s*(\d+))?$/);
+      if (!m) return;
+      const from = Number(m[1]), to = m[2] ? Number(m[2]) : from;
+      for (let v = from; v <= Math.max(from, to) && v - from < 200; v++) out.push(v);
+    });
+    return Array.from(new Set(out));
+  }
+
+  // -> { ok, bookId?, chapter?, verses?: number[], matches?: string[] (ids), message? }
+  function parseReference(input) {
+    let t = String(input || '').toLowerCase()
+      .replace(/[–—]/g, '-')
+      .replace(/\b(chapter|verses|verse)\b/g, ' ')
+      .replace(/\bfirst\b/g, '1').replace(/\bsecond\b/g, '2').replace(/\bthird\b/g, '3')
+      .replace(/^\s*iii\s+/, '3 ').replace(/^\s*ii\s+/, '2 ').replace(/^\s*i\s+(?=[a-z])/, '1 ')
+      .replace(/\s+/g, ' ').trim();
+    if (!t) return { ok: false, empty: true };
+    const m = t.match(/^(?:([123])\s*)?([a-z]+(?:\s[a-z]+)*)?(?:\s*(\d+)(?:\s*[:.]\s*|\s+)?(\d+(?:\s*-\s*\d+)?(?:\s*,\s*\d+(?:\s*-\s*\d+)?)*)?)?$/);
+    if (!m) return { ok: false, message: 'Try a form like “John 3:16” or “1 Cor 13:4-7”.' };
+    const [, num, name, chap, verseSpec] = m;
+    const out = { ok: true };
+    if (name) {
+      const matches = matchBooks((num || '') + name);
+      if (!matches.length) return { ok: false, message: `No book matches “${(num ? num + ' ' : '') + name}”.` };
+      if (matches.length > 1) return { ok: false, matches, message: 'Which book?' };
+      out.bookId = matches[0];
+    } else if (num && !chap) {
+      return { ok: false, message: 'Add a book name, e.g. “1 John 3”.' };
+    }
+    const chapter = chap ? Number(chap) : (!name && num ? Number(num) : undefined);
+    if (chapter !== undefined) out.chapter = chapter;
+    if (verseSpec) {
+      out.verses = expandVerses(verseSpec);
+      if (!out.verses.length) return { ok: false, message: 'Could not read the verse numbers.' };
+    }
+    if (!out.bookId && out.chapter === undefined) return { ok: false, message: 'Type a book name.' };
+    return out;
+  }
+
+  function bookName(id) { return BOOK_NAME_BY_ID[id] || id; }
+
   // Every bundled version across all languages, synchronously (no file loads):
   // [{ id, label, langKey, langLabel }]. Used for the version dropdowns.
   function getVersionList() {
@@ -133,5 +232,5 @@ const BibleAPI = (() => {
     return out;
   }
 
-  return { getVersionList, LANGS, getTranslationsForLang, getBooks, getChapter, extractVerses, buildSlides };
+  return { parseReference, bookName, getVersionList, LANGS, getTranslationsForLang, getBooks, getChapter, extractVerses, buildSlides };
 })();

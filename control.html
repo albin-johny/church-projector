@@ -9,7 +9,7 @@
 <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
-<div class="app view-list hidden" id="app-root">
+<div class="app hidden" id="app-root">
 
   <!-- LEFT: library rail -->
   <div class="rail">
@@ -27,10 +27,15 @@
       <button class="tab-btn active" data-tab="songs">Songs</button>
       <button class="tab-btn" data-tab="bible">Bible</button>
       <button class="tab-btn" data-tab="custom">Custom</button>
+      <button class="tab-btn" data-tab="service">Service</button>
     </div>
     <div class="search-wrap" id="songs-search-wrap">
       <button class="btn btn-bookmarks" id="btn-bookmarks-filter">★ Bookmarks</button>
       <input type="text" id="song-search" placeholder="Search songs, lyrics, tags…">
+    </div>
+    <div class="search-wrap" id="bible-jump-wrap" style="display:none">
+      <input type="text" id="bible-jump" placeholder="Jump to…  e.g. John 3:16" autocomplete="off" autocapitalize="off" spellcheck="false">
+      <div class="jump-hint" id="bible-jump-hint"></div>
     </div>
     <div class="list" id="song-list"></div>
     <div class="rail-footer" id="songs-footer">
@@ -40,9 +45,6 @@
       <input type="file" id="file-import" accept="application/json" style="display:none">
     </div>
   </div>
-
-  <!-- Mobile only: back from the content view to the library list -->
-  <button class="btn btn-small" id="btn-mobile-back">← Back to list</button>
 
   <!-- CENTER: editor / bible picker -->
   <div class="stage" id="stage"></div>
@@ -132,6 +134,7 @@
 <script src="js/config.js"></script>
 <script src="js/auth.js"></script>
 <script src="js/store.js"></script>
+<script src="js/service.js"></script>
 <script src="js/bible.js"></script>
 <script src="js/control.js"></script>
 </body>

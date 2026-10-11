@@ -1,84 +1,92 @@
 # Verse Deck
 
-A browser-only song & scripture projector for church services — English, Malayalam and Hindi.
-No installation on any machine, no server-side code, no database. Just static files you can
-host anywhere, opened in a normal browser tab.
+A browser-based song & scripture projector for church services — English, Malayalam and Hindi.
+Nothing to install on the operator's PC: the control panel and the projector screen are two
+web pages. The front end is plain static files (no build step); [Supabase](https://supabase.com)
+provides the login, the shared song library and the live link between devices.
 
 ## How it works
 
-- **`control.html`** — the operator's panel. Search/add/edit songs, browse the Bible, click a
-  slide to put it live.
-- **`display.html`** — the plain black screen that actually goes on the projector. Open it,
-  drag it onto the extended/projector monitor, press **F** for fullscreen.
-- The two pages talk to each other instantly over `BroadcastChannel` (same browser, same
-  machine) — nothing goes over the internet for that part, so it's as fast as your monitor's
-  refresh rate.
-- The **song library** lives in the browser's `localStorage` on whichever machine you're using,
-  seeded from `data/songs.json` the first time it loads.
-- The **Bible** is fetched live from the [Free Use Bible API](https://bible.helloao.org) —
-  free, no key, no copyright restrictions on the text — filtered to English, Malayalam and
-  Hindi translations.
+- **`control.html`** — the operator's panel (laptop, tablet or phone). Log in, pick songs or
+  Bible verses, build a service order, and click a slide to put it live.
+- **`display.html`** — the screen that goes on the projector. Open it on any device, enter the
+  display code shown on the control panel (or open the "Copy link" URL), and go fullscreen
+  (**F** / **F11**).
+- Control and display are linked two ways: instantly in the same browser (`BroadcastChannel`),
+  and over Supabase Realtime for other devices. A display that reconnects catches up to the
+  slide currently on screen.
+- The **song library** and the **service order** live in the Supabase database, shared by
+  everyone using the church login.
+- The **Bible** is bundled in the site (`data/bible/*.json`) — no lookups, works offline.
 
-## Deploying to your church subdomain
+## Using the control panel
 
-This is a fully static site — there is no build step and no server requirement beyond serving
-files. Any of these work:
+| Area | What it does |
+|---|---|
+| **Songs** | Search (title, lyrics, tags — any language), ★ bookmarks, add/edit/delete, Import / Export. Click a slide to show it. |
+| **Bible** | Pick **Version 1** (and optionally **Version 2** to show two versions side by side), choose a book and chapter on the left. Click a verse; **Shift+click** for a range; **Ctrl/⌘+click** to add/remove single verses. |
+| **Jump box** | Above the books list: type `John 3:16`, `1 cor 13:4-7`, `ps 23` (English names for every version). **Enter** jumps and selects, **Enter again** puts it on screen. `/` focuses it. |
+| **Custom** | Paste one-off announcements/readings; a blank line starts a new slide. |
+| **Service** | Your running order. Use "＋ Add to service" on songs, selected Bible verses and custom text; reorder with ▲ ▼; **Next item / Prev item** loads and shows each item. |
 
-1. **cPanel / shared hosting** (most church website hosts): create the subdomain (e.g.
-   `verses.yourchurch.org`), then upload every file in this folder to its document root via
-   the File Manager or FTP, keeping the folder structure (`css/`, `js/`, `data/`) intact.
-2. **Netlify / Vercel / GitHub Pages** (free): drag-and-drop this folder, or connect it as a
-   repo — point the custom subdomain at it. Also works well if you'd rather not touch the
-   church's main hosting at all.
-3. **A shared network drive / USB**, for a single-laptop setup with no hosting at all — open
-   `index.html` directly in the browser. (The Bible lookup still needs internet; the song
-   library and display link work fully offline.)
+Controls on the right: **Prev / Next**, **Blank**, **Clear**, **A− / A+** (projector text
+size), **Open display window**, **Present on this screen** (single-monitor mode). Keyboard:
+←/→ or ↑/↓ for previous/next slide, **B** blank, **Space/Enter** show the selection.
 
-Once uploaded, `https://verses.yourchurch.org/` is your landing page, with links into the
-control panel and display.
+On a phone or portrait tablet (≤ 900px) the panel is one scrolling page with Prev / Next /
+Blank / Clear pinned to the bottom.
 
-## Building your song library (the copyright-safe way)
+### Moving the control panel between devices
 
-Nearly all modern worship songs — Malayalam and English — are copyrighted, even the ones sung
-freely in services. This app deliberately ships with an **empty library** (plus two
-genuinely public-domain hymns as a working example) rather than pre-loaded lyrics. Add the
-songs your church already has the right to use:
+Log in on the new device. If another device was active in the last minute you'll be asked to
+take over; the old panel locks. The display keeps its connection and its last slide the whole
+time.
 
-1. Open the control panel → **Songs** tab → **New song**.
-2. Paste in the lyrics you already use (from your own songbook, files, or CCLI SongSelect if
-   your church has a licence). Leave a blank line between verses/chorus — each blank line
-   becomes a new projector slide.
-3. Save. It's now in your browser's library permanently.
+## First-time setup (once per church)
 
-### Sharing the library across the team
+1. **Supabase project** (free tier): create one at supabase.com.
+2. **Database**: SQL Editor → paste and run [`supabase/schema.sql`](supabase/schema.sql)
+   (safe to re-run).
+3. **Login**: Authentication → Users → *Add user* (email + password, auto-confirm). This one
+   shared login is for the control panel.
+4. **Config**: put the project URL and the *publishable* key in [`js/config.js`](js/config.js).
+   Never put the database password or a secret / service_role key in this repo.
+5. **Deploy** (below), then add the final site URL under Authentication → URL Configuration.
 
-Because this is a static site with no database, the simplest reliable way to keep everyone's
-copy in sync is:
+## Deploying
 
-1. Build up the library on one machine.
-2. Songs tab → **Export** → downloads `songs.json`.
-3. Upload that file to `data/songs.json` on your hosting, replacing the starter file.
-4. On any other machine, open the app fresh (or clear the browser's local song data) — it
-   will seed itself from the shared `data/songs.json` automatically. You can also re-import a
-   newer copy any time via **Import** (it merges by title, so duplicates get updated, not
-   doubled).
+The site is static; it is hosted on **Vercel** (connected to this GitHub repo, so every push to
+`main` deploys) and can be pointed at a church subdomain (CNAME → Vercel, then add the domain
+in Vercel's Domains settings). Any static host also works. `.vercelignore` keeps the Bible
+source files, `scripts/` and `supabase/` out of the deployment.
 
-This is deliberately low-tech so it works on any hosting with zero setup. If down the track
-you want *live* shared editing (no export/upload step), the natural upgrade is a small PHP
-endpoint or a free tier of Firebase/Supabase writing to the same `data/songs.json` shape —
-happy to build that layer once you know what your host supports.
+`.github/workflows/keep-alive.yml` pings Supabase every 3 days so the free tier doesn't pause
+after a week of inactivity (GitHub disables scheduled workflows after 60 days without commits —
+re-enable it in the Actions tab if that happens).
 
-## Using the Bible
+## Songs and copyright
 
-Bible → pick a language pill (English / Malayalam / Hindi) → pick a translation, book and
-chapter → **Load** → click any verse (or verse range) to put it live. "Verses per slide" lets
-you group 2–3 short verses onto one slide if that reads better on your screen.
+Nearly all modern worship songs are copyrighted. The app ships with just two public-domain
+hymns as examples (`data/songs.json`, loaded only into an empty library). Add songs your church
+has the right to use: Songs tab → **New song**, paste the lyrics, a blank line = a new slide.
+Malayalam and Hindi songs take native-script lyrics plus an optional English/Manglish line per
+stanza, shown together.
+
+Use **Export** now and then for a JSON backup of the library (the free tier has no automatic
+backups).
+
+## Bible versions
+
+Bundled: KJV, UKJV, NIV (English), Malayalam 1910 and Malayalam BSI, Hindi IRV and Hindi Bible
+(BSI). To add one, put its `.db` (SQLite `words` table) or simple `.xml` file in `data/bible/`,
+add it to `TARGETS` in `scripts/convert_bible_db.py`, run `python3 scripts/convert_bible_db.py`,
+then add the generated JSON to `TRANSLATIONS` in `js/bible.js`. Check the licence of any
+translation you add — the NIV in particular is copyrighted.
 
 ## Notes
 
-- Needs an internet connection for: loading the Google fonts on first visit, and any Bible
-  lookup. The song library and the control↔display link work with no internet at all once the
-  page has loaded once.
-- Everything renders in the browser's own fonts for Malayalam (Noto Sans Malayalam) and Hindi
-  (Noto Sans Devanagari), so verses and song titles in either script display correctly on the
-  projector without extra setup.
+- Needs internet for: Google Fonts on first load, the song library, and the cross-device link.
+  The Bible, Custom text and the same-browser display link work without it.
+- Malayalam and Hindi use Noto Sans Malayalam / Noto Sans Devanagari so verses and songs show
+  correctly on the projector without extra setup.
+- `CONTEXT.md` is a developer hand-off log (architecture, decisions, pending work).

@@ -606,74 +606,86 @@ body{
 }
 .verse-head span:nth-child(3){ padding-left:12px; }
 
+/* ---------- Bible jump box ---------- */
+.jump-hint{
+  min-height:18px; margin-top:6px;
+  font-size:12px; line-height:1.4; color:var(--paper-dim);
+}
+.jump-hint.ok{ color:var(--paper); }
+.jump-hint.err{ color:var(--red); }
+.jump-hint button{
+  font:inherit; font-size:12px;
+  background:none; border:1px solid var(--line); border-radius:12px;
+  color:var(--paper); padding:2px 9px; margin:2px 4px 0 0; cursor:pointer;
+}
+.jump-hint button:hover{ border-color:var(--gold); }
+.jump-hint .show-btn{ background:var(--gold); border-color:var(--gold); color:var(--gold-text); font-weight:600; }
+.verse-slide.verse-row.picked{ border-color:var(--gold); }
+
+/* ---------- Service tab ---------- */
+.svc-bar{ display:flex; gap:6px; padding:2px 2px 8px; }
+.svc-bar .btn{ flex:1; }
+.svc-item{ align-items:center; }
+.svc-num{
+  flex:none; width:20px; text-align:center;
+  font-family:var(--font-ui); font-size:12px; color:var(--paper-dim);
+}
+.svc-item .item-main{ flex:1; min-width:0; }
+.svc-actions{ display:flex; gap:2px; flex:none; }
+.svc-actions .star-btn[disabled]{ opacity:0.25; cursor:default; }
+
 /* ---------- Mobile / portrait tablet layout (<= 900px) ----------
-   One screen at a time, like a remote: header + tabs on top, then either the library list
-   (view-list) or the song / chapter content (view-stage), with the live preview and the
-   Prev / Next / Blank / Clear buttons docked at the bottom. */
-#btn-mobile-back{ display:none; }
+   A normal scrolling page: header, live preview, tabs/search, library list (fixed height,
+   scrolls inside itself), then the song / verse content. Prev / Next / Blank / Clear are
+   pinned to the bottom of the screen so they are always reachable. */
 @media (max-width: 900px){
   .app{
     display:flex; flex-direction:column;
-    height:100vh; height:100dvh;
+    height:auto; min-height:100vh;
     grid-template-columns:none; grid-template-rows:none;
+    /* Dock height scales with the screen height (taller phone = slightly bigger buttons). */
+    --btn-h: clamp(38px, 5.6vh, 46px);
+    --dock-h: calc(var(--btn-h) + 14px + env(safe-area-inset-bottom, 0px));
+    padding-bottom:var(--dock-h);
   }
   .rail{ display:contents; }
-  .rail-header{ flex:none; padding:10px 14px 8px; background:var(--panel); }
-  .rail-header .mark{ font-size:19px; }
-  .tabs{ flex:none; padding:8px 12px; background:var(--panel); }
-  .tab-btn{ padding:10px 6px; }
-  .search-wrap{ flex:none; padding:8px 12px; background:var(--panel); }
-  .list{ flex:1 1 0; min-height:0; background:var(--panel); }
-  .rail-footer{ flex:none; background:var(--panel); padding:8px 12px; }
+  .rail-header{ order:0; padding:12px 14px 10px; background:var(--panel); border-bottom:1px solid var(--line); }
+  .preview-pane{ order:1; border-left:none; border-bottom:1px solid var(--line); padding:12px 14px 14px; display:block; }
+  .tabs{ order:2; padding:10px 12px; background:var(--panel); }
+  .search-wrap{ order:3; padding:10px 12px 6px; background:var(--panel); }
+  .list{ order:4; flex:none; max-height:42vh; overflow-y:auto; background:var(--panel); }
+  .list.bible-mode{ height:42vh; max-height:none; }
+  .rail-footer{ order:5; background:var(--panel); padding:10px 12px; }
+  .stage{ order:6; overflow:visible; padding:16px 14px 24px; }
 
-  .stage{ flex:1 1 0; min-height:0; padding:12px 14px 16px; }
-  #btn-mobile-back{
-    display:none;
-    flex:none;
-    margin:8px 12px 0;
-    align-self:flex-start;
-    padding:8px 12px;
-  }
-  .app.view-stage #btn-mobile-back{ display:block; }
-  .app.view-list .stage{ display:none; }
-  .app.view-stage .search-wrap,
-  .app.view-stage .list,
-  .app.view-stage .rail-footer{ display:none !important; }
-
-  /* Bottom dock: status line, small preview, big transport buttons. */
-  .preview-pane{
-    flex:none;
-    border-left:none;
-    border-top:1px solid var(--line);
-    padding:8px 12px calc(8px + env(safe-area-inset-bottom, 0px));
-    display:block;
-  }
-  .preview-pane h2,
+  /* Live preview keeps its normal 16:9 size; extras that need a big screen are hidden. */
+  .preview-pane .status-row{ display:inline-flex; margin:0 14px 8px 0; }
   #pair-row,
   #btn-open-display,
   #btn-present,
   .controls-block .hint,
   .controls-block .nav-row:nth-child(3){ display:none !important; }
-  .preview-pane .status-row{
-    display:inline-flex; margin:0 14px 6px 0; font-size:11px;
+
+  /* Transport dock fixed to the bottom of the screen. */
+  .controls-block{
+    position:fixed; left:0; right:0; bottom:0; z-index:30;
+    flex-direction:row; gap:8px; margin:0;
+    padding:7px 12px calc(7px + env(safe-area-inset-bottom, 0px));
+    background:var(--panel);
+    border-top:1px solid var(--line);
   }
-  .mini-screen{
-    aspect-ratio:auto;
-    height:64px;
-    padding:6px 10px;
-    font-size:12.5px;
-    line-height:1.35;
-  }
-  .controls-block{ flex-direction:row; gap:8px; margin-top:8px; }
   .controls-block .nav-row{ flex:1; gap:8px; }
-  .controls-block .btn{ min-height:46px; padding:8px 4px; font-size:12px; }
+  .controls-block .btn{ height:var(--btn-h); min-height:0; padding:0 4px; font-size:12px; }
 
   /* Touch-friendly lists; 16px inputs stop iOS from zooming on focus. */
   input, select, textarea{ font-size:16px !important; }
-  .list-item{ padding:13px 12px; }
-  .bible-rail{ grid-template-columns: 1fr 64px; }
-  .bible-book{ font-size:15px; padding:11px 10px; }
-  .bible-chapter{ font-size:15px; padding:11px 0; }
+  .list{ padding:4px 8px 8px; }
+  .list-item{ padding:8px 10px; margin-bottom:1px; }
+  .list-item .t2{ margin-top:1px; }
+  .bible-rail{ grid-template-columns: 1fr 58px; gap:4px; }
+  .bible-books, .bible-chapters{ gap:0; }
+  .bible-book{ font-size:15px; padding:7px 10px; line-height:1.2; }
+  .bible-chapter{ font-size:15px; padding:7px 0; line-height:1.2; }
   .verse-slide.verse-row{ padding:10px; font-size:15.5px; }
   .stage h1{ font-size:21px; }
 }

@@ -26,6 +26,7 @@ church-projector/
   js/auth.js           Auth — Supabase Auth login gate for control.html (exposes Auth.client)
   js/link.js           ProjectorLink — local BroadcastChannel link + Supabase Realtime (.remote)
   js/store.js          SongStore — async song library backed by Supabase Postgres
+  js/service.js        ServiceStore — the service order (table `services`)
   js/bible.js           BibleAPI — reads bundled local JSON (data/bible/*.json), no live API calls
   js/control.js         all operator-panel UI logic and state (single IIFE, no framework)
   js/display.js         projector output rendering logic (listens via ProjectorLink)
@@ -35,7 +36,7 @@ church-projector/
   supabase/schema.sql  database schema + RLS (already run on the project)
   robots.txt            Disallow: / (keeps the deployed site out of search engines)
   .vercelignore         keeps data/bible/*.db, *.xml, scripts/, supabase/ out of the deployment
-  README.md             deployment + usage instructions (partly STALE — see "Pending")
+  README.md             setup, deployment and usage instructions
 ```
 
 ## Key design decisions (so you don't accidentally undo them)
@@ -165,7 +166,7 @@ church-projector/
   `updated_at`.
 - `sessions`: `id`, `pairing_code` unique, `active_control_id`, `active_control_at`, `created_at`.
 - `live_state`: `session_id` pk/fk, `message` jsonb, `updated_at`; in the realtime publication.
-- An ordered per-service setlist is NOT modelled yet (would be a `setlist_items` table).
+- `services`: `id`, `name`, `service_date`, `items` jsonb (ordered array), timestamps — see "Service order".
 
 ## Bible translations (bundled)
 
@@ -213,14 +214,44 @@ church-projector/
 
 ## Mobile / portrait-tablet control layout (<= 900px)
 
-- One screen at a time: header + tabs on top, then either the library list (`.app.view-list`)
-  or the content (`.app.view-stage`: song / chapter verses / editor / custom), toggled by
-  `setMobileView()` in `control.js`; a "← Back to list" button (`#btn-mobile-back`) returns.
-  Picking a song, a Bible chapter, "+ New song" or the Custom tab opens the content view.
-- The preview pane becomes a bottom dock: status dots, a small preview, and Prev / Next /
-  Blank / Clear. Font scale, open-display/present buttons, pairing row and hints are hidden
-  there (use desktop for those). `.rail` is `display: contents` so its pieces are direct flex
-  children of `.app`. Desktop (> 900px) keeps the three-column grid; view classes do nothing.
+- A normal scrolling page (no paging between screens). Order: header, live preview (normal
+  16:9), tabs, search, library list, then the content (song slides / verse rows / editor).
+  The library list (songs, or Bible books + chapters) has a fixed height (42vh) and scrolls
+  inside itself; the rest scrolls with the page. `.rail` is `display: contents` and the pieces
+  are ordered with flex `order`.
+- Prev / Next / Blank / Clear are pinned to the bottom of the screen (`.controls-block` is
+  `position: fixed` on mobile; `.app` has bottom padding for it). Font scale, open-display /
+  present buttons, the pairing row and hints are hidden there (use desktop for those).
+- Desktop (> 900px) keeps the three-column grid.
+
+## Bible reference jump box
+
+- Input above the books list (`#bible-jump`, shown only on the Bible tab; `/` focuses it).
+  `BibleAPI.parseReference()` accepts English names/abbreviations for every version (even
+  Malayalam/Hindi): "John 3:16", "jn 3:16-18", "1 cor 13:4-7", "ps 23", "3:16" (current book),
+  "rom 8:28,31". Ambiguous prefixes ("jo", "ma") show clickable book chips.
+- **Enter** jumps (book + chapter loaded, verses selected and marked `.picked`, scrolled into
+  view); **Enter again** or the "Show on screen" button puts the selection on the projector
+  (`showBibleSelection()`). Errors name the limits ("John has 21 chapters"). Global Space/Enter
+  on the Bible tab also shows a picked selection (`startCurrentSelectionLive()`).
+- Not included: full-text search of verse content.
+
+## Service order (phase 1 — implemented)
+
+- 4th rail tab **Service** (`js/service.js` → `ServiceStore`, table `services`). Phase 1 uses one
+  "current" service (most recently updated row, auto-created). `items` is an ordered array saved
+  whole on each change:
+  `{id, type:'song', songId, title, sub}`, `{id, type:'bible', versionA, versionB, bookId,
+  chapter, nums[], title, sub}`, `{id, type:'custom', text, title, sub}`.
+- Adding: "＋ Add to service" on a song, "＋ Add selected verses to service" in the Bible tab
+  (stores the exact verse numbers + both versions), "＋ Add to service" in Custom.
+- Rail (`renderServiceRail()`): items with ▲ ▼ ✕, a **Prev item / Next item** bar. Clicking an
+  item loads its slides into the centre pane (not live); Prev/Next item load it **and** put its
+  first slide on screen. Slides are rebuilt from the source each time (`buildServiceSlides()`;
+  a Bible item is one combined slide via `composeBibleSlide()`). Prev/Next/Space within an item
+  work as usual and stop at the item's last slide (no auto-jump to the next item).
+- Bookmarks (★) stay as a separate quick shortlist.
+- Needs the `services` table (appended to `supabase/schema.sql`; run it in the SQL Editor).
 
 ## Projector display layout
 
@@ -251,15 +282,12 @@ that ever happens.
 
 - **Keep-alive caveat**: GitHub disables the scheduled workflow after 60 days without commits;
   the operator chose to find a workaround later (e.g. cron-job.org ping, or a Vercel cron).
-
-
 - **Subdomain**: point the church subdomain (GoDaddy DNS CNAME → Vercel), add it in Vercel and
   in Supabase allowed URLs; decide whether to rotate the old git-history password / make the
   repo private (NIV text is in the repo).
-- **README.md is stale** (still describes localStorage-only + manual export sharing).
 - **Importer** (web scraping with attribution) — last, runs outside the app, copyright caveat.
-- **Ordered service setlist** (today only unordered bookmarks).
-- Bible reference jump box ("John 3:16").
+- **Service order, phase 2**: several saved/dated services (switch, duplicate last week's, rename,
+  delete), "add from bookmarks", drag-and-drop reordering, optional printable order.
 - Keyboard shortcut cheatsheet in the UI; "which song is live" indicator; undo for delete.
 - Optional: choose a different default Bible version per language (reorder `TRANSLATIONS`).
 
