@@ -60,17 +60,16 @@ const SongStore = (() => {
     return song;
   }
 
-  // Server-side search + pagination. Matching is a case-insensitive substring over title,
-  // lyrics (both scripts) and tags, backed by a trigram index.
+  // Server-side ranked search + pagination (SQL function search_songs). Results are ordered:
+  // first line starts with the text, first line contains it, title/tags contain it, then
+  // anything found in later stanzas — alphabetical within each group.
   // Returns { songs, total } for the requested page.
   async function search(query, { lang = 'all', setlistOnly = false, offset = 0, limit = PAGE } = {}) {
-    let q = db().from(TABLE).select('*', { count: 'exact' });
-    if (lang && lang !== 'all') q = q.eq('language', lang);
-    if (setlistOnly) q = q.eq('in_setlist', true);
-    const term = (query || '').trim();
-    if (term) q = q.ilike('search_text', '%' + term.replace(/[\\%_]/g, '\\$&') + '%');
-    const res = check(await q.order('title', { ascending: true }).range(offset, offset + limit - 1));
-    return { songs: res.data.map(fromRow).map(remember), total: res.count || 0 };
+    const res = check(await db().rpc('search_songs', {
+      q: (query || '').trim(), lang, setlist_only: !!setlistOnly, off: offset, lim: limit
+    }));
+    const rows = res.data || [];
+    return { songs: rows.map(fromRow).map(remember), total: rows.length ? Number(rows[0].total) : 0 };
   }
 
   function getCached(id) {

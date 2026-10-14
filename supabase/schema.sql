@@ -106,3 +106,76 @@ alter table public.services enable row level security;
 drop policy if exists services_auth_all on public.services;
 create policy services_auth_all on public.services
   for all to authenticated using (true) with check (true);
+
+-- ---------- Ranked song search (first line first) ----------
+-- Run this block once (safe to re-run). It adds songs.first_line, keeps it up to date, and
+-- adds search_songs(): results are ordered
+--   0  first line STARTS with the search text
+--   1  first line contains it
+--   2  title or tags contain it
+--   3  found only in later stanzas
+-- then alphabetically by title within each group.
+alter table public.songs add column if not exists first_line text not null default '';
+
+create or replace function public.songs_set_search_text() returns trigger
+language plpgsql as $$
+declare
+  s0 jsonb := new.slides -> 0;
+  a text := '';
+  b text := '';
+begin
+  if jsonb_typeof(s0) = 'string' then
+    a := s0 #>> '{}';
+  elsif jsonb_typeof(s0) = 'object' then
+    a := coalesce(s0->>'text', '');
+    b := coalesce(s0->>'en', '');
+  end if;
+  -- first line of the first slide: native script, then Manglish/English, newline-separated
+  new.first_line := split_part(trim(a), E'\n', 1) || E'\n' || split_part(trim(b), E'\n', 1);
+
+  new.search_text := coalesce(new.title,'') || ' ' ||
+    coalesce((select string_agg(
+        case when jsonb_typeof(e) = 'string' then e #>> '{}'
+             else coalesce(e->>'text','') || ' ' || coalesce(e->>'en','') end, ' ')
+      from jsonb_array_elements(new.slides) e), '') || ' ' ||
+    coalesce(array_to_string(new.tags,' '),'');
+  new.updated_at := now();
+  return new;
+end $$;
+
+-- Backfill first_line for existing songs (fires the trigger above).
+update public.songs set title = title;
+
+create or replace function public.search_songs(
+  q text, lang text default 'all', setlist_only boolean default false,
+  off int default 0, lim int default 50
+) returns table (
+  id text, title text, language text, tags text[], slides jsonb, in_setlist boolean,
+  source_url text, lyricist text, copyright text, updated_at timestamptz, total bigint
+)
+language sql stable security invoker as $$
+  with p as (
+    select lower(trim(coalesce(q, ''))) as t,
+           replace(replace(replace(lower(trim(coalesce(q, ''))), '\', '\\'), '%', '\%'), '_', '\_') as pat
+  ), r as (
+    select s.*,
+      case
+        when p.t = '' then 3
+        when lower(s.first_line) like p.pat || '%' or lower(s.first_line) like '%' || E'\n' || p.pat || '%' then 0
+        when lower(s.first_line) like '%' || p.pat || '%' then 1
+        when lower(s.title) like '%' || p.pat || '%' or lower(array_to_string(s.tags, ' ')) like '%' || p.pat || '%' then 2
+        else 3
+      end as rank
+    from public.songs s, p
+    where (lang is null or lang = 'all' or s.language = lang)
+      and (not setlist_only or s.in_setlist)
+      and (p.t = '' or lower(s.search_text) like '%' || p.pat || '%')
+  )
+  select r.id, r.title, r.language, r.tags, r.slides, r.in_setlist,
+         r.source_url, r.lyricist, r.copyright, r.updated_at,
+         count(*) over () as total
+  from r
+  order by r.rank, lower(r.title)
+  offset off limit lim;
+$$;
+grant execute on function public.search_songs(text, text, boolean, int, int) to authenticated;

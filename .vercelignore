@@ -2,3 +2,4 @@ data/bible/*.db
 scripts
 supabase
 data/bible/*.xml
+import

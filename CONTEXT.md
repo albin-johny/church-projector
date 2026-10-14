@@ -125,8 +125,11 @@ church-projector/
 ## Songs in the database — implemented
 
 - `js/store.js` (`SongStore`) is Supabase-backed and **async**: `search(query, {lang,
-  setlistOnly, offset, limit})` → `{songs, total}` (server-side `ilike` on `search_text`, 50 per
-  page, "Load more" in the UI), `get`, `save` (upsert), `remove`, `toggleSetlist`, `count`,
+  setlistOnly, offset, limit})` → `{songs, total}` via the SQL function `search_songs()` (50 per
+  page, "Load more" in the UI). **Ranked**: first line starts with the text → first line contains
+  it → title/tags contain it → later stanzas only; alphabetical within each group. `songs.first_line`
+  (first line of the first slide, native + Manglish) is kept by the trigger; the block that adds
+  it is appended to `supabase/schema.sql`, `get`, `save` (upsert), `remove`, `toggleSetlist`, `count`,
   `exportJSON`, `importJSON` (upsert by id), `seedIfEmpty`, `loadSharedFromServer`. An in-memory
   cache makes already-listed songs readable synchronously via `getCached(id)`.
 - `seedIfEmpty()` does a one-time migration of any old `cp_songs_v1` localStorage library into
@@ -236,6 +239,32 @@ church-projector/
   on the Bible tab also shows a picked selection (`startCurrentSelectionLive()`).
 - Not included: full-text search of verse content.
 
+## Song importer (Verse View)
+
+- Source: our own community songbook, `https://verseview.info/songbook/`, category
+  `VV Malayalam 2021` (all Malayalam; ~4,612 songs). `titledb.php` (POST `catName`) returns
+  the whole title list in one response (the 100-item groups seen in DevTools are just its
+  preview). `songsdb.php` (POST `songName`, `category`) returns one song: `lyrics` (native
+  script) and `lyrics2` (Manglish), stanzas separated by `<slide>`, lines by `<BR>`, stanzas
+  numbered "1 ", "2 "; also `copy` (lyricist), `title2` (Malayalam title), `tags`, `yvideo`.
+  The site's certificate is invalid, so the script skips TLS verification for that host only.
+- `scripts/import-verseview.mjs` (Node, no dependencies), state in `import/` (git-ignored and
+  excluded from Vercel):
+  1. `node scripts/import-verseview.mjs titles` → `import/titles.json`
+  2. `node scripts/import-verseview.mjs fetch --limit 700` → one raw JSON per song in
+     `import/raw/`; resumable (`import/fetched.json`), ~2.5–4s between requests, stops after 3
+     failures in a row. Run daily until "0 remaining" (≈ a week).
+  3. `node scripts/import-verseview.mjs convert [--keep-markers]` → `import/songs-import.json` +
+     `import/report.txt`. Then load the JSON with the control panel's Songs → **Import**
+     (upserts by id; ids are `vv_<site id>` so re-importing never duplicates).
+- Mapping: `title` = site `name` (Manglish, easy to search); native-script `title2` is added as
+  a tag so it's searchable; slides are `{text, en}` pairs (stanza numbers stripped; trailing `;-`
+  repeat markers stripped unless `--keep-markers`); `lyricist` = `copy`. `sourceUrl` is
+  deliberately not imported. `lyricist` is stored but not shown in the UI (only needed if the project is
+  ever released publicly: show the lyricist under the lyrics).
+- Internal use only (our own community site); the imported lyrics live only in the private
+  database, never in git or the deployment.
+
 ## Service order (phase 1 — implemented)
 
 - 4th rail tab **Service** (`js/service.js` → `ServiceStore`, table `services`). Phase 1 uses one
@@ -285,7 +314,8 @@ that ever happens.
 - **Subdomain**: point the church subdomain (GoDaddy DNS CNAME → Vercel), add it in Vercel and
   in Supabase allowed URLs; decide whether to rotate the old git-history password / make the
   repo private (NIV text is in the repo).
-- **Importer** (web scraping with attribution) — last, runs outside the app, copyright caveat.
+- **Importer (in progress)** — see "Song importer (Verse View)". Test run of 5 songs done; the
+  weekly batch (`fetch --limit 700` daily) has not been started yet.
 - **Service order, phase 2**: several saved/dated services (switch, duplicate last week's, rename,
   delete), "add from bookmarks", drag-and-drop reordering, optional printable order.
 - Keyboard shortcut cheatsheet in the UI; "which song is live" indicator; undo for delete.

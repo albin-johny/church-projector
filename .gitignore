@@ -3,3 +3,4 @@
 
 data/bible/*.db
 data/bible/*.xml
+import/
