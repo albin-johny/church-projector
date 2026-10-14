@@ -19,13 +19,13 @@ const BibleAPI = (() => {
   // generated from the .db sources by scripts/convert_bible_db.py.
   const TRANSLATIONS = {
     en: [
+      { id: 'eng_niv',  file: 'data/bible/en_niv.json',     label: 'NIV' },
       { id: 'eng_kjv',  file: 'data/bible/en.json',          label: 'KJV' },
-      { id: 'eng_ukjv', file: 'data/bible/en_ukjv.json',    label: 'UKJV' },
-      { id: 'eng_niv',  file: 'data/bible/en_niv.json',     label: 'NIV' }
+      { id: 'eng_ukjv', file: 'data/bible/en_ukjv.json',    label: 'UKJV' }
     ],
     ml: [
-      { id: 'mal_fbf', file: 'data/bible/ml.json',         label: 'Malayalam 1910' },
-      { id: 'mal_bsi', file: 'data/bible/ml_bsi.json',     label: 'Malayalam BSI' }
+      { id: 'mal_bsi', file: 'data/bible/ml_bsi.json',     label: 'Malayalam BSI' },
+      { id: 'mal_fbf', file: 'data/bible/ml.json',         label: 'Malayalam 1910' }
     ],
     hi: [
       { id: 'HINIRV',      file: 'data/bible/hi.json',          label: 'Hindi IRV' },

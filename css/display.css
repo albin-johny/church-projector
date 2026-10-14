@@ -4,7 +4,9 @@
   --stage-text:#f5f5f5;
   --stage-dim: rgba(245,245,245,0.55);
   --gold:#f5f5f5;
-  --font-display: 'Fraunces', Georgia, 'Times New Roman', serif;
+  --font-display: 'Hanken Grotesk', 'Segoe UI', system-ui, Arial, sans-serif;
+  /* Projected text: a plain, highly legible sans (same family as the Malayalam/Hindi fonts). */
+  --font-stage: 'Hanken Grotesk', 'Segoe UI', system-ui, Arial, sans-serif;
   --font-ui: 'Hanken Grotesk', 'Segoe UI', system-ui, sans-serif;
   /* Manual override set from the control panel's A-/A+ buttons, to
      compensate for a projector that crops/letterboxes the image edges. */
@@ -34,7 +36,7 @@ body{
   flex-direction:column;
   align-items:center;
   justify-content:center;
-  font-family:var(--font-display);
+  font-family:var(--font-stage);
   color:var(--stage-text);
 }
 body.show-cursor{ cursor:default; }
@@ -92,8 +94,8 @@ body.show-cursor{ cursor:default; }
   color:var(--stage-dim);
 }
 
-#main-text.lang-mal, #main-text-2.lang-mal, #title-tag.lang-mal{ font-family: 'Noto Sans Malayalam', var(--font-display); }
-#main-text.lang-hin, #main-text-2.lang-hin, #title-tag.lang-hin{ font-family: 'Noto Sans Devanagari', var(--font-display); }
+#main-text.lang-mal, #main-text-2.lang-mal, #title-tag.lang-mal{ font-family: 'Noto Sans Malayalam', var(--font-stage); }
+#main-text.lang-hin, #main-text-2.lang-hin, #title-tag.lang-hin{ font-family: 'Noto Sans Devanagari', var(--font-stage); }
 
 #sub-ref{
   margin-top:3.4vh;
@@ -205,3 +207,7 @@ body.show-cursor{ cursor:default; }
   cursor:pointer;
 }
 #pair-open.show{ opacity:1; pointer-events:auto; }
+
+/* English projected text: regular weight. */
+#main-text:not(.lang-mal):not(.lang-hin),
+#main-text-2:not(.lang-mal):not(.lang-hin){ font-weight:400; }

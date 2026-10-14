@@ -4,8 +4,15 @@
 <meta charset="utf-8">
 <title>Verse Deck — Control Panel</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="manifest" href="manifest-control.webmanifest">
+<meta name="theme-color" content="#0a0a0a">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Verse Deck">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600&family=Hanken+Grotesk:wght@400;500;600&family=JetBrains+Mono:wght@400;500&family=Noto+Sans+Malayalam:wght@400;500&family=Noto+Sans+Devanagari:wght@400;500&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@400;500;600&family=JetBrains+Mono:wght@400;500&family=Noto+Sans+Malayalam:wght@400;500&family=Noto+Sans+Devanagari:wght@400;500&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
@@ -17,6 +24,7 @@
       <div class="rail-header-top">
         <div class="mark">Verse<em>Deck</em></div>
         <div class="rail-header-actions">
+          <button class="theme-toggle" id="btn-help" title="Keyboard shortcuts (?)">?</button>
           <button class="theme-toggle" id="btn-theme-toggle" title="Switch light/dark theme">☀</button>
           <button class="theme-toggle" id="btn-logout" title="Log out">⎋</button>
         </div>
@@ -64,6 +72,7 @@
       <span>Display code: <strong id="pair-code" style="letter-spacing:0.15em"></strong></span>
       <button class="btn btn-small" id="btn-copy-display-link" title="Copy a link that opens the display already paired">Copy link</button>
     </div>
+    <div class="live-now" id="live-now" title="Jump to the song that is live"></div>
     <div class="mini-screen" id="mini-screen">Nothing live yet</div>
 
     <div class="controls-block">
@@ -127,6 +136,27 @@
   </div>
 </div>
 
+<div class="login-overlay hidden" id="help-overlay">
+  <div class="login-box help-box">
+    <div class="mark">Verse<em>Deck</em></div>
+    <div class="meta">Keyboard shortcuts</div>
+    <table class="help-table">
+      <tr><td><kbd>→</kbd> <kbd>↓</kbd></td><td>Next slide</td></tr>
+      <tr><td><kbd>←</kbd> <kbd>↑</kbd></td><td>Previous slide</td></tr>
+      <tr><td><kbd>Space</kbd> <kbd>Enter</kbd></td><td>Show the selected song / verses / item</td></tr>
+      <tr><td><kbd>B</kbd></td><td>Blank the display</td></tr>
+      <tr><td><kbd>Esc</kbd></td><td>Exit “Present on this screen”</td></tr>
+      <tr><td><kbd>/</kbd></td><td>Bible: jump to a reference (e.g. John 3:16)</td></tr>
+      <tr><td><kbd>Enter</kbd> ×2</td><td>In the jump box: jump, then show</td></tr>
+      <tr><td>Click</td><td>Bible verse: show it</td></tr>
+      <tr><td><kbd>Shift</kbd>+click</td><td>Bible: select a range of verses</td></tr>
+      <tr><td><kbd>Ctrl</kbd>/<kbd>⌘</kbd>+click</td><td>Bible: add or remove a single verse</td></tr>
+      <tr><td><kbd>?</kbd></td><td>Show this list</td></tr>
+    </table>
+    <button class="btn btn-gold" id="btn-help-close" style="width:100%;margin-top:16px;">Close</button>
+  </div>
+</div>
+
 <div class="toast" id="toast"></div>
 
 <script src="js/link.js"></script>
@@ -137,5 +167,6 @@
 <script src="js/service.js"></script>
 <script src="js/bible.js"></script>
 <script src="js/control.js"></script>
+<script src="js/pwa.js"></script>
 </body>
 </html>

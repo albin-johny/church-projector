@@ -19,6 +19,21 @@ provides the login, the shared song library and the live link between devices.
   everyone using the church login.
 - The **Bible** is bundled in the site (`data/bible/*.json`) — no lookups, works offline.
 
+## Installing as an app (PWA)
+
+Open the site in Chrome/Edge/Safari and use *Install app* / *Add to Home Screen*. Install the
+control panel (`control.html`) on phones and tablets, and `display.html` on the projector
+device — the display installs full screen and remembers its code. Songs and the live link still
+need the internet; the Bible and the app itself load even when the connection is poor.
+
+## Working without internet (one laptop + projector)
+
+Open the site once with internet (a phone hotspot is fine), log in, and let it finish — you'll
+see "Saved N songs for offline use". After that the same laptop can run a service with no
+internet: search and show songs, the Bible, Custom text, and the display window on the projector
+all work. Editing songs, bookmarks and changing the service order need a connection. A phone
+remote talking to a *separate* display PC needs internet.
+
 ## Using the control panel
 
 | Area | What it does |

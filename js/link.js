@@ -186,7 +186,8 @@ const ProjectorLink = (() => {
       role = 'display';
       setStatus('connecting');
       const { data, error } = await getClient().rpc('join_session', { code: String(code || '').trim() });
-      if (error || !data) { setStatus('error'); return { ok: false }; }
+      if (error) { setStatus(navigator.onLine ? 'error' : 'offline'); return { ok: false, network: true }; }
+      if (!data) { setStatus('error'); return { ok: false, notFound: true }; }
       sessionId = data;
       subscribe();
       return { ok: true };
@@ -282,15 +283,27 @@ const ProjectorLink = (() => {
     return 'clamp(28px, 4.6vw, 82px)';
   }
 
+  // Malayalam / Devanagari glyphs look larger than Latin ones at the same font-size. When a slide
+  // shows two blocks in DIFFERENT scripts, the native-script block is scaled down so both read
+  // at a similar size. Tune these two numbers if needed (1 = no adjustment).
+  const SCRIPT_SCALE = { 'lang-mal': 0.82, 'lang-hin': 0.9 };
+
   // Shrinks the given text elements (starting from `base`, any CSS size) until everything
   // inside `container` fits its height, so long verses never run into the footer. The
   // length-based pickFontSize() is only the starting point.
   function fitText(container, els, base) {
-    els.forEach((el) => { el.style.fontSize = base; });
+    els[0].style.fontSize = base;
     let size = parseFloat(getComputedStyle(els[0]).fontSize);
+    const shown = els.filter((el) => !el.classList.contains('hidden') && el.textContent);
+    const raw = els.map((el) => (shown.length > 1 && shown.includes(el)
+      ? (SCRIPT_SCALE[Object.keys(SCRIPT_SCALE).find((c) => el.classList.contains(c))] || 1) : 1));
+    // Both blocks in the same script (e.g. two Malayalam versions): no adjustment.
+    const ratios = raw.every((r) => r === raw[0]) ? raw.map(() => 1) : raw;
+    const apply = (px) => els.forEach((el, i) => { el.style.fontSize = (px * ratios[i]) + 'px'; });
+    apply(size);
     for (let i = 0; i < 40 && container.scrollHeight > container.clientHeight + 1 && size > 14; i++) {
       size *= 0.94;
-      els.forEach((el) => { el.style.fontSize = size + 'px'; });
+      apply(size);
     }
   }
 

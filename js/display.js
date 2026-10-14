@@ -126,15 +126,14 @@
 
   async function pair(code) {
     code = String(code || '').trim().toUpperCase();
-    if (!code) return false;
+    if (!code) return { ok: false };
     const r = await ProjectorLink.remote.joinDisplay(code);
     if (r.ok) {
       localStorage.setItem(PAIR_KEY, code);
       try { sessionStorage.removeItem(SKIP_KEY); } catch (e) {}
       hidePairScreen();
-      return true;
     }
-    return false;
+    return r;
   }
 
   ProjectorLink.remote.onStatus((st) => {
@@ -149,9 +148,14 @@
     if (!pairOk()) { pairError.textContent = 'Online mode is not available.'; return; }
     pairGo.disabled = true;
     pairError.textContent = '';
-    const ok = await pair(pairInput.value);
+    const r = await pair(pairInput.value);
     pairGo.disabled = false;
-    if (!ok) { pairError.textContent = 'Code not recognised — check it and try again.'; pairInput.focus(); pairInput.select(); }
+    if (!r.ok) {
+      pairError.textContent = r.network
+        ? 'Can’t reach the server — check the internet connection, or use this window without a code.'
+        : 'Code not recognised — check it and try again.';
+      pairInput.focus(); pairInput.select();
+    }
   });
   pairInput.addEventListener('input', () => {
     pairInput.value = pairInput.value.toUpperCase().replace(/[^A-Z0-9]/g, '');
@@ -185,14 +189,23 @@
     const saved = (localStorage.getItem(PAIR_KEY) || '').toUpperCase();
     const code = urlCode || saved;
     if (code) {
-      const ok = await pair(code);
-      if (!ok) showPairScreen('Code not recognised — enter the current code.');
+      const r = await pair(code);
+      // Offline (network failure) is fine: the same-browser link keeps working, and we retry
+      // when the connection returns. Only a genuinely unknown code asks for a new one.
+      if (!r.ok && r.notFound) showPairScreen('Code not recognised — enter the current code.');
       return;
     }
     let skipped = false;
     try { skipped = sessionStorage.getItem(SKIP_KEY) === '1'; } catch (e) {}
-    if (!skipped) showPairScreen('');
+    if (!skipped && navigator.onLine) showPairScreen('');
   })();
+
+  // Back online: re-join the session automatically.
+  window.addEventListener('online', () => {
+    if (!pairOk() || ProjectorLink.remote.status === 'online') return;
+    const code = (localStorage.getItem(PAIR_KEY) || '').toUpperCase();
+    if (code) pair(code);
+  });
 
   // Local convenience shortcuts (also controllable from the panel).
   window.addEventListener('keydown', (e) => {

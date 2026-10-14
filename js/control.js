@@ -20,8 +20,8 @@
     custom: { text: '', slides: [] },
     service: { loaded: false, loading: false, name: 'Service', items: [], active: -1, slides: [], error: null },
     bible: {
-      versionA: 'eng_kjv',   // first (left) version — also supplies the book list
-      versionB: '',          // optional second version shown beside it
+      versionA: 'eng_niv',   // primary (left) version — also supplies the book list
+      versionB: 'mal_bsi',   // secondary version shown beside it (can be set to none)
       books: [],
       bookId: '',
       chapter: 1,
@@ -32,12 +32,30 @@
     }
   };
 
-  function toast(msg) {
+  // toast(msg) or toast(msg, { label, onClick, ms }) — the latter shows a clickable action
+  // (e.g. "Undo") and stays up longer.
+  function toast(msg, opts) {
     const t = $('#toast');
-    t.textContent = msg;
+    t.textContent = '';
+    t.classList.remove('has-action');
+    const span = document.createElement('span');
+    span.textContent = msg;
+    t.appendChild(span);
+    if (opts && opts.label) {
+      const b = document.createElement('button');
+      b.className = 'toast-action';
+      b.textContent = opts.label;
+      b.addEventListener('click', () => {
+        t.classList.remove('show', 'has-action');
+        clearTimeout(toast._h);
+        opts.onClick();
+      });
+      t.appendChild(b);
+      t.classList.add('has-action');
+    }
     t.classList.add('show');
     clearTimeout(toast._h);
-    toast._h = setTimeout(() => t.classList.remove('show'), 2200);
+    toast._h = setTimeout(() => t.classList.remove('show', 'has-action'), (opts && opts.ms) || 2200);
   }
 
   /* ---------------- Tabs ---------------- */
@@ -67,7 +85,15 @@
       if (req !== listRequest) return;   // a newer search superseded this one
       state.songList = append ? state.songList.concat(res.songs) : res.songs;
       state.songTotal = res.total;
-      state.listError = null;
+      state.listError = res.noCopy
+        ? 'You are offline and no saved copy of the library exists yet. Open the app once with internet to save one.'
+        : null;
+      if (res.offline && !state.offlineNoticed) {
+        state.offlineNoticed = true;
+        toast('Offline — showing the saved song list (read-only)');
+      }
+      if (!res.offline) state.offlineNoticed = false;
+      state.listOffline = !!res.offline;
     } catch (e) {
       if (req !== listRequest) return;
       state.listError = e.message;
@@ -93,7 +119,8 @@
     const total = state.songTotal;
     const filtered = !!state.songQuery.trim();
     $('#library-count').textContent = total + (total === 1 ? ' song' : ' songs') +
-      (state.setlistOnly ? ' bookmarked' : filtered ? ' found' : ' in your library');
+      (state.setlistOnly ? ' bookmarked' : filtered ? ' found' : ' in your library') +
+      (state.listOffline ? ' · offline copy' : '');
     if (!songs.length) {
       list.innerHTML = filtered
         ? `<div class="empty-note">No songs match “${escapeHtml(state.songQuery.trim())}”.</div>`
@@ -103,9 +130,9 @@
       return;
     }
     list.innerHTML = songs.map(s => `
-      <div class="list-item ${s.id === state.selectedSongId ? 'selected' : ''}" data-id="${s.id}">
+      <div class="list-item ${s.id === state.selectedSongId ? 'selected' : ''} ${s.id === state.liveSongId ? 'is-live' : ''}" data-id="${s.id}">
         <div class="item-main">
-          <div class="t1">${escapeHtml(s.title)}</div>
+          <div class="t1">${escapeHtml(s.title)}${s.id === state.liveSongId ? '<span class="live-badge">LIVE</span>' : ''}</div>
           <div class="t2">${langLabel(s.language)} · ${s.slides.length} slide${s.slides.length === 1 ? '' : 's'}</div>
         </div>
         <button class="star-btn ${s.inSetlist ? 'active' : ''}" data-star-id="${s.id}" title="${s.inSetlist ? 'Remove from bookmarks' : 'Add to bookmarks'}">${s.inSetlist ? '★' : '☆'}</button>
@@ -167,10 +194,13 @@
     return { text: en, ref, title, lang: 'en' };
   }
   function songToLiveSlides(song) {
+    let slides;
     if (isDualTextSong(song)) {
-      return song.slides.map((s, i) => buildDualSlide(s.text, s.en, i, song.slides.length, song.title, song.language));
+      slides = song.slides.map((s, i) => buildDualSlide(s.text, s.en, i, song.slides.length, song.title, song.language));
+    } else {
+      slides = song.slides.map((t, i) => ({ text: t, ref: `${i + 1}/${song.slides.length}`, title: song.title, lang: song.language }));
     }
-    return song.slides.map((t, i) => ({ text: t, ref: `${i + 1}/${song.slides.length}`, title: song.title, lang: song.language }));
+    return slides.map(sl => Object.assign(sl, { songId: song.id }));   // lets the UI mark the live song
   }
 
   /* ---------------- Song editor (center stage) ---------------- */
@@ -338,14 +368,26 @@
       renderStage();
     });
     if (d.id) $('#btn-delete-song').addEventListener('click', async () => {
-      if (!confirm('Delete "' + d.title + '"? This can\'t be undone.')) return;
+      if (!confirm('Delete "' + d.title + '"?')) return;
+      const backup = JSON.parse(JSON.stringify(SongStore.getCached(d.id) || { id: d.id }));
       try { await SongStore.remove(d.id); }
       catch (err) { toast('Could not delete: ' + err.message); return; }
       state.selectedSongId = null;
       state.editingDraft = null;
       state.songMode = 'view';
       await refreshList(); renderStage();
-      toast('Song deleted');
+      toast('Song deleted', {
+        label: 'Undo', ms: 10000,
+        onClick: async () => {
+          try {
+            const restored = await SongStore.save(backup);
+            state.selectedSongId = restored.id;
+            state.songMode = 'view';
+            await refreshList(); renderStage();
+            toast('Restored “' + restored.title + '”');
+          } catch (err) { toast('Could not restore: ' + err.message); }
+        }
+      });
     });
     renderSlidePreview();
   }
@@ -536,23 +578,8 @@
     if (sel) sel.scrollIntoView({ block: 'nearest' });
   }
 
-  // The chosen versions are remembered per browser (a convenience, never required).
-  const BIBLE_PREF_KEY = 'cp_bible_versions';
-  function loadBiblePrefs() {
-    const b = state.bible;
-    try {
-      const p = JSON.parse(localStorage.getItem(BIBLE_PREF_KEY) || 'null');
-      const ids = BibleAPI.getVersionList().map(v => v.id);
-      if (p && ids.includes(p.a)) b.versionA = p.a;
-      if (p && p.b && ids.includes(p.b) && p.b !== b.versionA) b.versionB = p.b;
-    } catch (e) { /* ignore */ }
-  }
-  function saveBiblePrefs() {
-    const b = state.bible;
-    try { localStorage.setItem(BIBLE_PREF_KEY, JSON.stringify({ a: b.versionA, b: b.versionB })); } catch (e) { /* ignore */ }
-  }
-  let biblePrefsLoaded = false;
-
+  // Defaults are fixed on every load: primary = English NIV, secondary = Malayalam BSI. The
+  // dropdowns can still be changed during a session.
   function versionOptions(selectedId, allowNone) {
     const groups = {};
     BibleAPI.getVersionList().forEach(v => { (groups[v.langLabel] = groups[v.langLabel] || []).push(v); });
@@ -565,7 +592,6 @@
   async function renderBibleStage() {
     const stage = $('#stage');
     const b = state.bible;
-    if (!biblePrefsLoaded) { loadBiblePrefs(); biblePrefsLoaded = true; }
     stage.innerHTML = `
       <h1>Bible</h1>
       <div class="meta" id="bible-ref-title">Choose a book and chapter on the left</div>
@@ -582,14 +608,12 @@
     $('#f-version-a').addEventListener('change', async () => {
       b.versionA = $('#f-version-a').value;
       if (b.versionB === b.versionA) { b.versionB = ''; $('#f-version-b').value = ''; }
-      saveBiblePrefs();
       b.books = [];
       await loadBooks();
     });
     $('#f-version-b').addEventListener('change', () => {
       b.versionB = $('#f-version-b').value;
       if (b.versionB === b.versionA) { b.versionB = ''; $('#f-version-b').value = ''; }
-      saveBiblePrefs();
       loadChapter();
     });
     $('#btn-bible-add-service').addEventListener('click', () => {
@@ -1002,10 +1026,10 @@
       list.innerHTML = bar + `<div class="empty-note">The service is empty.<br>Open a song, Bible verses or Custom text and use “Add to service”.</div>`;
     } else {
       list.innerHTML = bar + sv.items.map((it, i) => `
-        <div class="list-item svc-item ${i === sv.active ? 'selected' : ''}" data-i="${i}">
+        <div class="list-item svc-item ${i === sv.active ? 'selected' : ''} ${it.type === 'song' && it.songId === state.liveSongId ? 'is-live' : ''}" data-i="${i}">
           <span class="svc-num">${i + 1}</span>
           <div class="item-main">
-            <div class="t1">${escapeHtml(it.title || '')}</div>
+            <div class="t1">${escapeHtml(it.title || '')}${it.type === 'song' && it.songId === state.liveSongId ? '<span class="live-badge">LIVE</span>' : ''}</div>
             <div class="t2">${escapeHtml(it.sub || it.type)}</div>
           </div>
           <div class="svc-actions">
@@ -1072,6 +1096,24 @@
   }
 
   /* ---------------- Live display control ---------------- */
+  // Which song is on the projector, plus a "Live: …" line above the preview. Clicking it jumps
+  // to that song. Re-draws the list only when the live song actually changes.
+  function setLiveSource(songId, label) {
+    const changed = (state.liveSongId || null) !== (songId || null);
+    state.liveSongId = songId || null;
+    const el = $('#live-now');
+    el.textContent = label ? 'Live: ' + label : '';
+    el.classList.toggle('on', !!label);
+    if (changed && (state.tab === 'songs' || state.tab === 'service')) renderList();
+  }
+  $('#live-now').addEventListener('click', () => {
+    if (!state.liveSongId) return;
+    state.selectedSongId = state.liveSongId;
+    state.songMode = 'view';
+    if (state.tab === 'songs') { renderList(); renderStage(); }
+    else setTab('songs');
+  });
+
   function pushLive() {
     let s = state.liveSlides[state.liveIndex];
     const o = state.liveOverride;
@@ -1080,6 +1122,7 @@
     if (!s) return;
     state.liveNums = s.nums || [];
     state.liveKey = s.key || '';
+    setLiveSource(s.songId || null, s.footer ? s.footer : `${s.title || 'Custom'}${s.ref ? ' · ' + s.ref : ''}`);
     const msg = { type: 'slide', lang: s.lang, title: s.title, text: s.text, ref: s.ref };
     if (s.footer) { msg.footer = s.footer; msg.footer2 = s.footer2 || ''; msg.title = ''; msg.ref = ''; }
     if (s.text2) { msg.text2 = s.text2; msg.lang2 = s.lang2; }
@@ -1255,6 +1298,8 @@
     if (state.liveIndex < state.liveSlides.length - 1) { state.liveIndex++; pushLive(); }
   });
   $('#btn-blank').addEventListener('click', () => {
+    const el = $('#live-now');
+    if (el.classList.contains('on')) el.textContent = 'Display is blanked';
     ProjectorLink.send({ type: 'blank' });
     updatePresentScreen({ type: 'blank' });
   });
@@ -1263,6 +1308,7 @@
     updatePresentScreen({ type: 'clear' });
     $('#mini-screen').textContent = 'Nothing live yet';
     state.liveIndex = -1;
+    setLiveSource(null, '');
     highlightLiveSlide();
   });
 
@@ -1297,10 +1343,20 @@
     if (state.displayWin) setDisplayStatus(!state.displayWin.closed);
   }, 1500);
 
+  // Shortcut cheat sheet ("?" button or the ? key).
+  const helpEl = $('#help-overlay');
+  const openHelp = () => helpEl.classList.remove('hidden');
+  const closeHelp = () => helpEl.classList.add('hidden');
+  $('#btn-help').addEventListener('click', openHelp);
+  $('#btn-help-close').addEventListener('click', closeHelp);
+  helpEl.addEventListener('click', (e) => { if (e.target === helpEl) closeHelp(); });
+
   // Keyboard shortcuts on the panel itself.
   window.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && !helpEl.classList.contains('hidden')) { closeHelp(); return; }
     if (e.key === 'Escape' && state.presentMode) { closePresentMode(); return; }
     if (['INPUT', 'TEXTAREA', 'SELECT'].includes(document.activeElement.tagName)) return;
+    if (e.key === '?') { e.preventDefault(); openHelp(); return; }
     if (e.key === '/' && state.tab === 'bible') { e.preventDefault(); jumpEl.focus(); jumpEl.select(); return; }
     if (e.key === 'ArrowRight' || e.key === 'ArrowDown') { e.preventDefault(); $('#btn-next').click(); }
     if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') { e.preventDefault(); $('#btn-prev').click(); }
@@ -1323,16 +1379,27 @@
   });
 
   /* ---------------- Login gate ---------------- */
+  let remoteWired = false, remoteStarting = false;
   async function startRemote() {
     const R = ProjectorLink.remote;
-    R.onStatus((st) => {
-      const text = { online: 'Online: connected', connecting: 'Online: connecting…',
-        offline: 'Online: not connected', error: 'Online: connection problem' }[st] || st;
-      $('#online-status').textContent = text;
-      $('#online-dot').classList.toggle('on', st === 'online');
-      setDisplayStatus();
-    });
-    R.onTakeover(() => $('#takeover-overlay').classList.remove('hidden'));
+    if (!remoteWired) {
+      remoteWired = true;
+      R.onStatus((st) => {
+        const text = { online: 'Online: connected', connecting: 'Online: connecting…',
+          offline: 'Offline: using this device only', error: 'Online: connection problem' }[st] || st;
+        $('#online-status').textContent = text;
+        $('#online-dot').classList.toggle('on', st === 'online');
+        setDisplayStatus();
+      });
+      R.onTakeover(() => $('#takeover-overlay').classList.remove('hidden'));
+    }
+    if (remoteStarting) return;
+    remoteStarting = true;
+    if (!navigator.onLine) {
+      $('#online-status').textContent = 'Offline: using this device only';
+      remoteStarting = false;
+      return;
+    }
     try {
       const res = await R.startControl({
         confirmTakeover: async () => confirm('Another device is controlling the projector. Take over?')
@@ -1352,9 +1419,25 @@
       }
     } catch (e) {
       console.warn('Online mode unavailable, working locally:', e);
-      $('#online-status').textContent = 'Online: ' + (e && e.message ? e.message : 'connection problem');
+      $('#online-status').textContent = navigator.onLine
+        ? 'Online: ' + (e && e.message ? e.message : 'connection problem')
+        : 'Offline: using this device only';
+    } finally {
+      remoteStarting = false;
     }
   }
+  // Connection comes back: reconnect the live link and refresh the library.
+  window.addEventListener('online', () => {
+    if (!$('#app-root').classList.contains('hidden')) {
+      startRemote();
+      refreshList();
+      SongStore.syncOffline();
+    }
+  });
+  window.addEventListener('offline', () => {
+    $('#online-status').textContent = 'Offline: using this device only';
+    $('#online-dot').classList.remove('on');
+  });
   $('#btn-take-back').addEventListener('click', () => location.reload());
   $('#btn-copy-display-link').addEventListener('click', async () => {
     const url = new URL('display.html', location.href);
@@ -1363,13 +1446,26 @@
     catch (e) { prompt('Copy this link:', url.href); }
   });
 
+  // Fetching the default versions once lets the service worker cache them for offline use.
+  function prefetchBibleForOffline() {
+    if (!navigator.onLine || (navigator.connection && navigator.connection.saveData)) return;
+    const files = ['data/bible/en_niv.json', 'data/bible/ml_bsi.json'];
+    const run = async () => { for (const f of files) { try { await fetch(f); } catch (e) { /* ignore */ } } };
+    (window.requestIdleCallback || ((fn) => setTimeout(fn, 3000)))(run);
+  }
+
   async function startApp() {
     startRemote();
     applyTheme(ProjectorLink.getTheme());
     state.fontScale = ProjectorLink.getFontScale();
     applyFontScale();
-    await SongStore.seedIfEmpty();
+    if (navigator.onLine) await SongStore.seedIfEmpty();
     await refreshList();
+    // Background: keep the offline copy fresh and pre-load the default Bible versions.
+    SongStore.syncOffline().then((r) => {
+      if (r && r.full && r.total) toast(`Saved ${r.total} songs for offline use`);
+    });
+    prefetchBibleForOffline();
     renderStage();
   }
 
