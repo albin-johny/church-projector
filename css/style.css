@@ -660,7 +660,10 @@ body{
 
   /* Live preview keeps its normal 16:9 size; extras that need a big screen are hidden. */
   .preview-pane .status-row{ display:inline-flex; margin:0 14px 8px 0; }
-  #pair-row,
+  /* The display code stays visible on phones so a display can be paired from them. */
+  #pair-row{ display:flex; flex-wrap:wrap; align-items:center; gap:6px 10px; margin:0 0 8px; font-size:12px; color:var(--paper-dim); }
+  #pair-row strong{ font-size:14px; color:var(--paper); }
+  #pair-row .btn{ padding:4px 8px; font-size:11px; }
   #btn-open-display,
   #btn-present,
   .controls-block .hint,
