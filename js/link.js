@@ -286,7 +286,7 @@ const ProjectorLink = (() => {
   // Malayalam / Devanagari glyphs look larger than Latin ones at the same font-size. When a slide
   // shows two blocks in DIFFERENT scripts, the native-script block is scaled down so both read
   // at a similar size. Tune these two numbers if needed (1 = no adjustment).
-  const SCRIPT_SCALE = { 'lang-mal': 0.82, 'lang-hin': 0.9 };
+  const SCRIPT_SCALE = { 'lang-mal': 0.82, 'lang-hin': 0.9, 'lang-tam': 0.82 };
 
   // Shrinks the given text elements (starting from `base`, any CSS size) until everything
   // inside `container` fits its height, so long verses never run into the footer. The

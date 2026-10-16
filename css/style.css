@@ -516,6 +516,7 @@ kbd{
 #present-text, #present-text-2{ color:rgb(var(--stage-text-rgb)); }
 #present-text.lang-mal, #present-text-2.lang-mal, #present-title.lang-mal{ font-family:'Noto Sans Malayalam', var(--font-stage); }
 #present-text.lang-hin, #present-text-2.lang-hin, #present-title.lang-hin{ font-family:'Noto Sans Devanagari', var(--font-stage); }
+#present-text.lang-tam, #present-text-2.lang-tam, #present-title.lang-tam{ font-family:'Noto Sans Tamil', var(--font-stage); }
 #present-ref{
   margin-top:3.4vh;
   font-family:var(--font-ui);
@@ -564,6 +565,7 @@ kbd{
 #present-footer .ver{ margin-top:0.2vh; font-size:calc(0.85vw * var(--font-scale)); line-height:1.1; color:rgba(var(--stage-text-rgb),0.5); letter-spacing:0.08em; text-transform:uppercase; }
 #present-footer.lang-mal .ref{ font-family:'Noto Sans Malayalam', var(--font-ui); }
 #present-footer.lang-hin .ref{ font-family:'Noto Sans Devanagari', var(--font-ui); }
+#present-footer.lang-tam .ref{ font-family:'Noto Sans Tamil', var(--font-ui); }
 
 /* ---------- Bible tab: books + chapters in the left rail ---------- */
 /* The rail list itself doesn't scroll in Bible mode; the books column and the chapters
@@ -729,5 +731,6 @@ kbd{
   .stage h1{ font-size:21px; }
 }
 
-#present-text:not(.lang-mal):not(.lang-hin),
-#present-text-2:not(.lang-mal):not(.lang-hin){ font-weight:400; }
+#present-text:not(.lang-mal):not(.lang-hin):not(.lang-tam),
+#present-text-2:not(.lang-mal):not(.lang-hin):not(.lang-tam){ font-weight:400; }
+#present-text-2:not(.lang-mal):not(.lang-tam){ font-weight:400; }

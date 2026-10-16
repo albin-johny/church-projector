@@ -7,7 +7,7 @@ create extension if not exists pg_trgm;
 create table if not exists public.songs (
   id          text primary key,                 -- keeps existing "s_..." ids on import
   title       text not null,
-  language    text not null check (language in ('en','ml','hi')),
+  language    text not null check (language in ('en','ml','hi','ta')),
   tags        text[] not null default '{}',
   slides      jsonb not null default '[]',      -- strings (en) or {text, en} pairs (ml/hi)
   in_setlist  boolean not null default false,   -- UI "bookmarks"

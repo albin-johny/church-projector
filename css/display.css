@@ -96,6 +96,7 @@ body.show-cursor{ cursor:default; }
 
 #main-text.lang-mal, #main-text-2.lang-mal, #title-tag.lang-mal{ font-family: 'Noto Sans Malayalam', var(--font-stage); }
 #main-text.lang-hin, #main-text-2.lang-hin, #title-tag.lang-hin{ font-family: 'Noto Sans Devanagari', var(--font-stage); }
+#main-text.lang-tam, #main-text-2.lang-tam, #title-tag.lang-tam{ font-family: 'Noto Sans Tamil', var(--font-stage); }
 
 #sub-ref{
   margin-top:3.4vh;
@@ -143,6 +144,7 @@ body.show-cursor{ cursor:default; }
 #verse-footer .ver{ margin-top:0.2vh; font-size:calc(0.85vw * var(--font-scale)); line-height:1.1; color:rgba(var(--stage-text-rgb),0.5); letter-spacing:0.08em; text-transform:uppercase; }
 #verse-footer.lang-mal .ref{ font-family:'Noto Sans Malayalam', var(--font-ui); }
 #verse-footer.lang-hin .ref{ font-family:'Noto Sans Devanagari', var(--font-ui); }
+#verse-footer.lang-tam .ref{ font-family:'Noto Sans Tamil', var(--font-ui); }
 
 /* ---------- Pairing screen (enter the code from the control panel) ---------- */
 #pair-screen{
@@ -209,5 +211,6 @@ body.show-cursor{ cursor:default; }
 #pair-open.show{ opacity:1; pointer-events:auto; }
 
 /* English projected text: regular weight. */
-#main-text:not(.lang-mal):not(.lang-hin),
-#main-text-2:not(.lang-mal):not(.lang-hin){ font-weight:400; }
+#main-text:not(.lang-mal):not(.lang-hin):not(.lang-tam),
+#main-text-2:not(.lang-mal):not(.lang-hin):not(.lang-tam){ font-weight:400; }
+#main-text-2:not(.lang-mal):not(.lang-tam){ font-weight:400; }

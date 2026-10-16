@@ -7,10 +7,10 @@
   const blankOverlay = document.getElementById('blank-overlay');
   const verseFooter = document.getElementById('verse-footer');
 
-  const LANG_CLASS = { ml: 'lang-mal', hi: 'lang-hin' };
+  const LANG_CLASS = { ml: 'lang-mal', hi: 'lang-hin', ta: 'lang-tam' };
 
   function applyLangClass(el, lang) {
-    el.classList.remove('lang-mal', 'lang-hin');
+    el.classList.remove('lang-mal', 'lang-hin', 'lang-tam');
     if (LANG_CLASS[lang]) el.classList.add(LANG_CLASS[lang]);
   }
 

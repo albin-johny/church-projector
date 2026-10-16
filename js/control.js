@@ -168,7 +168,7 @@
   });
 
   function langLabel(code) {
-    return { en: 'English', ml: 'Malayalam', hi: 'Hindi', bi: 'Bilingual' }[code] || 'Other';
+    return { en: 'English', ml: 'Malayalam', hi: 'Hindi', ta: 'Tamil', bi: 'Bilingual' }[code] || 'Other';
   }
   function escapeHtml(s) {
     return (s || '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -182,7 +182,7 @@
   // dual-language mode already pushes to the display, so both languages
   // show stacked together while presenting.
   function hasSecondLangBox(language) {
-    return language === 'ml' || language === 'hi';
+    return language === 'ml' || language === 'hi' || language === 'ta';
   }
   function isDualTextSong(song) {
     return hasSecondLangBox(song.language) && song.slides.length > 0 && typeof song.slides[0] === 'object';
@@ -321,6 +321,7 @@
             <option value="en" ${d.language === 'en' ? 'selected' : ''}>English</option>
             <option value="ml" ${d.language === 'ml' ? 'selected' : ''}>Malayalam</option>
             <option value="hi" ${d.language === 'hi' ? 'selected' : ''}>Hindi</option>
+            <option value="ta" ${d.language === 'ta' ? 'selected' : ''}>Tamil</option>
           </select>
         </div>
         <div class="field">
@@ -1133,9 +1134,9 @@
   }
 
   /* ---------------- In-page presentation (single-monitor mode) ---------------- */
-  const LANG_CLASS = { ml: 'lang-mal', hi: 'lang-hin' };
+  const LANG_CLASS = { ml: 'lang-mal', hi: 'lang-hin', ta: 'lang-tam' };
   function applyPresentLangClass(el, lang) {
-    el.classList.remove('lang-mal', 'lang-hin');
+    el.classList.remove('lang-mal', 'lang-hin', 'lang-tam');
     if (LANG_CLASS[lang]) el.classList.add(LANG_CLASS[lang]);
   }
   function setPresentFooter(ref, ver) {

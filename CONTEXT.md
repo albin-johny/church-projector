@@ -151,11 +151,11 @@ church-projector/
 {
   id: "s_...",
   title: "Amazing Grace",
-  language: "en" | "ml" | "hi",
+  language: "en" | "ml" | "hi" | "ta",
   tags: ["hymn", "grace"],
   // language === "en": slides are plain strings, one per projector slide.
   slides: ["slide 1 text", "slide 2 text", ...],
-  // language === "ml" or "hi": slides are { text, en } pairs instead — native-script lyrics plus
+  // language === "ml", "hi" or "ta": slides are { text, en } pairs instead — native-script lyrics plus
   // a Manglish/English transliteration, shown stacked (text / text2). Either side can be blank,
   // but not both — enforced in control.js's saveSongFromEditor(). Anything touching song.slides
   // directly must check typeof slide first (see songToLiveSlides()/isDualTextSong()).

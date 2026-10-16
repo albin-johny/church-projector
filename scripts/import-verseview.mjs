@@ -7,6 +7,9 @@
      node scripts/import-verseview.mjs fetch --limit 700 # fetch up to N not-yet-fetched songs
      node scripts/import-verseview.mjs convert           # build import/songs-import.json
 
+   Add `--lang hi` (Hindi) or `--lang ta` (Tamil) to any step; state goes in import/<code>/.
+   Default is `--lang ml` (Malayalam).
+
    Then load import/songs-import.json with the control panel's Songs → Import button.
 
    Polite by design: one request at a time, DELAY_MS + jitter between requests, stops after
@@ -22,13 +25,24 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const HOST = 'verseview.info';
-const CATEGORY = 'VV Malayalam 2021';
-const LANGUAGE = 'ml';                  // every song in this category is Malayalam
+// One entry per supported language; every song in a category shares its language.
+// Malayalam keeps its original state in import/; other languages get import/<code>/.
+const CATEGORIES = {
+  ml: 'VV Malayalam 2021',
+  hi: 'VV Hindi 2021',
+  ta: 'VV Tamil 2021'
+};
+const argv = process.argv.slice(2);
+const langIdx = argv.indexOf('--lang');
+const LANGUAGE = langIdx >= 0 ? argv[langIdx + 1] : 'ml';
+const CATEGORY = CATEGORIES[LANGUAGE];
+if (!CATEGORY) { console.error(`Unknown --lang "${LANGUAGE}". Use: ${Object.keys(CATEGORIES).join(', ')}`); process.exit(1); }
 const DELAY_MS = 2500;                  // between song requests (+ up to 1.5s jitter)
 const MAX_CONSECUTIVE_FAILURES = 3;
 const UA = 'VerseDeck-internal-importer/1.0 (church songbook migration)';
 
-const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', 'import');
+const BASE = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', 'import');
+const ROOT = LANGUAGE === 'ml' ? BASE : path.join(BASE, LANGUAGE);
 const RAW = path.join(ROOT, 'raw');
 const TITLES = path.join(ROOT, 'titles.json');
 const OUT = path.join(ROOT, 'songs-import.json');
@@ -173,13 +187,13 @@ function cmdConvert(keepMarkers) {
   console.log(report);
 }
 
-const [cmd, ...rest] = process.argv.slice(2);
+const [cmd, ...rest] = argv;
 const flag = (name, dflt) => { const i = rest.indexOf(name); return i >= 0 ? rest[i + 1] : dflt; };
 try {
   if (cmd === 'titles') await cmdTitles();
   else if (cmd === 'fetch') await cmdFetch(Number(flag('--limit', 700)));
   else if (cmd === 'convert') cmdConvert(rest.includes('--keep-markers'));
-  else console.log('Usage: import-verseview.mjs titles | fetch [--limit N] | convert [--keep-markers]');
+  else console.log('Usage: import-verseview.mjs titles | fetch [--limit N] | convert [--keep-markers]  (add --lang ml|hi|ta)');
 } catch (e) {
   console.error(e.message);
   process.exit(1);
