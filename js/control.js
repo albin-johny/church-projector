@@ -1379,6 +1379,19 @@
     applyTheme(next);
   });
 
+  /* ---------------- Collapsible right pane ---------------- */
+  (function () {
+    const app = $('#app-root');
+    const KEY = 'cp_pane_collapsed';
+    const set = (on) => {
+      app.classList.toggle('pane-collapsed', on);
+      try { localStorage.setItem(KEY, on ? '1' : '0'); } catch (e) {}
+    };
+    try { if (localStorage.getItem(KEY) === '1') set(true); } catch (e) {}
+    $('#btn-pane-hide').addEventListener('click', () => set(true));
+    $('#btn-pane-show').addEventListener('click', () => set(false));
+  })();
+
   /* ---------------- Login gate ---------------- */
   let remoteWired = false, remoteStarting = false;
   async function startRemote() {

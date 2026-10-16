@@ -59,7 +59,10 @@
 
   <!-- RIGHT: live preview + controls -->
   <div class="preview-pane">
-    <h2>Live on screen</h2>
+    <div class="pane-head">
+      <h2>Live on screen</h2>
+      <button class="btn btn-small" id="btn-pane-hide" title="Hide this panel (keyboard shortcuts still work)">Hide ›</button>
+    </div>
     <div class="status-row">
       <div class="dot" id="display-dot"></div>
       <span id="display-status">Display window not open</span>
@@ -95,6 +98,8 @@
     </div>
   </div>
 </div>
+
+<button class="btn btn-small" id="btn-pane-show" title="Show the live preview and controls">‹ Live</button>
 
 <div class="present-overlay" id="present-overlay">
   <div id="present-stage-inner">

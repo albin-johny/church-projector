@@ -678,6 +678,19 @@ kbd{
 .svc-actions{ display:flex; gap:2px; flex:none; }
 .svc-actions .star-btn[disabled]{ opacity:0.25; cursor:default; }
 
+/* Collapsible right pane (desktop): hide it when presenting from the control panel itself. */
+.pane-head{ display:flex; align-items:center; justify-content:space-between; gap:8px; margin-bottom:10px; }
+.pane-head h2{ margin:0; }
+#btn-pane-show{ display:none; position:fixed; top:10px; right:10px; z-index:20; }
+.app.pane-collapsed{ grid-template-columns: 300px 1fr; }
+.app.pane-collapsed .preview-pane{ display:none; }
+body:has(.app.pane-collapsed) #btn-pane-show{ display:block; }
+@media (max-width: 900px){
+  #btn-pane-hide, #btn-pane-show{ display:none !important; }
+  .app.pane-collapsed{ grid-template-columns:none; }
+  .app.pane-collapsed .preview-pane{ display:block; }
+}
+
 /* ---------- Mobile / portrait tablet layout (<= 900px) ----------
    A normal scrolling page: header, live preview, tabs/search, library list (fixed height,
    scrolls inside itself), then the song / verse content. Prev / Next / Blank / Clear are
