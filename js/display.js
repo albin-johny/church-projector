@@ -175,6 +175,33 @@
     clearTimeout(pairBtnTimer);
     pairBtnTimer = setTimeout(() => pairOpen.classList.remove('show'), 3000);
   }
+  // Corner menu (top-left): switch to the control panel.
+  const navOpen = document.getElementById('nav-open');
+  const navMenu = document.getElementById('nav-menu');
+  let navTimer = null;
+  function revealNavButton() {
+    navOpen.classList.add('show');
+    clearTimeout(navTimer);
+    navTimer = setTimeout(() => {
+      if (navMenu.classList.contains('hidden')) navOpen.classList.remove('show');
+    }, 3000);
+  }
+  function closeNavMenu() { navMenu.classList.add('hidden'); revealNavButton(); }
+  navOpen.addEventListener('click', (e) => {
+    e.stopPropagation();
+    navMenu.classList.toggle('hidden');
+    revealNavButton();
+  });
+  document.addEventListener('click', (e) => {
+    if (!navMenu.contains(e.target)) closeNavMenu();
+  });
+  // Replace (not push) the history entry so switching back and forth doesn't pile up history.
+  document.getElementById('nav-control').addEventListener('click', (e) => {
+    e.preventDefault();
+    location.replace('control.html');
+  });
+  window.addEventListener('mousemove', revealNavButton);
+  window.addEventListener('touchstart', revealNavButton, { passive: true });
   window.addEventListener('mousemove', revealPairButton);
   window.addEventListener('touchstart', revealPairButton, { passive: true });
 

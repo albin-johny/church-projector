@@ -6,7 +6,7 @@
    - CDN scripts / Google Fonts: stale-while-revalidate, so the pages still start offline.
    - Everything else (Supabase API, realtime, keep-alive) is NOT touched.
    Bump VERSION to force every client to drop the old app-file cache. */
-const VERSION = 'v2';
+const VERSION = 'v6';
 const SHELL_CACHE = 'vd-shell-' + VERSION;
 const BIBLE_CACHE = 'vd-bible-v1';
 const RUNTIME_CACHE = 'vd-runtime-v1';

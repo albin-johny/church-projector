@@ -445,15 +445,15 @@ kbd{
 .login-overlay.hidden{ display:none !important; }
 .login-box{
   width:100%;
-  max-width:320px;
-  padding:32px 28px;
+  max-width:440px;
+  padding:44px 40px;
   background:var(--panel);
   border:1px solid var(--line);
   border-radius:6px;
 }
 .login-box .mark{
   font-family:var(--font-display);
-  font-size:24px;
+  font-size:32px;
   color:var(--paper);
   text-align:center;
 }
@@ -465,6 +465,12 @@ kbd{
   text-transform:uppercase;
   letter-spacing:0.1em;
   margin:6px 0 20px;
+}
+.login-box input{ padding:12px 14px; font-size:15px; }
+.login-actions{ display:flex; flex-direction:column; gap:12px; margin-top:8px; }
+.login-actions .btn{
+  display:flex; align-items:center; justify-content:center;
+  box-sizing:border-box; width:100%; padding:14px; font-size:13px; text-decoration:none;
 }
 .login-error{
   color:var(--red);

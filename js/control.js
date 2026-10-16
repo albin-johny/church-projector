@@ -1476,6 +1476,11 @@
     startApp();
   }
 
+  // Replace (not push) so switching back and forth doesn't pile up history.
+  document.querySelector('.login-actions a').addEventListener('click', (e) => {
+    e.preventDefault();
+    location.replace('display.html');
+  });
   $('#login-form').addEventListener('submit', async (e) => {
     e.preventDefault();
     const u = $('#f-login-user').value.trim();
